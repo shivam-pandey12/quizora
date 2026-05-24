@@ -43,3 +43,7 @@ Privacy, terms, and refund pages are practical launch placeholders. They need ow
 ## Analytics And Monitoring
 
 Phase 15 documents an event/error plan but does not install a dedicated analytics or error tracking SDK. Production monitoring still depends on host logs, Firebase Console, Razorpay dashboard, admin reports, and any future observability service added later.
+
+## Dependency Audit Notes
+
+`npm audit --omit=dev` currently reports moderate upstream transitive advisories in the `next` and `firebase-admin` dependency trees. The suggested npm force fixes are breaking/downgrade paths, so do not run `npm audit fix --force` blindly before launch. Track stable upstream releases and update intentionally after a build, smoke, billing, and trusted-scoring verification pass.

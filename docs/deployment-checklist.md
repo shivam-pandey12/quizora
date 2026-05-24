@@ -4,6 +4,7 @@
 
 ```bash
 npm install
+npm audit --omit=dev
 npm run typecheck
 npm run lint
 npm run build
@@ -15,6 +16,8 @@ Equivalent one-command check:
 ```bash
 npm run deploy:check
 ```
+
+Do not run `npm audit fix --force` without reviewing the dependency plan; it can introduce breaking downgrades.
 
 After a successful build, run `npm run start` when the environment can keep a production server running.
 
