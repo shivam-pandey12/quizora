@@ -23,6 +23,56 @@ const publicLinks = [
   { href: "/docs", label: "Docs" }
 ];
 
+function ProfileLogoutPill({
+  loggingOut,
+  onLogout,
+  profileImage,
+  profileName,
+  onNavigate,
+  mobile = false
+}: {
+  loggingOut: boolean;
+  onLogout: () => void;
+  profileImage?: string | null;
+  profileName: string;
+  onNavigate?: () => void;
+  mobile?: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "inline-flex h-12 items-center overflow-hidden rounded-full border border-border bg-surface/80 shadow-soft",
+        mobile ? "w-full" : "shrink-0"
+      )}
+    >
+      <Link
+        className={cn(
+          "flex h-full min-w-0 items-center gap-2 px-3 font-semibold transition hover:bg-primary/10",
+          mobile ? "flex-1 justify-center" : "max-w-40"
+        )}
+        href="/profile"
+        onClick={onNavigate}
+      >
+        <UserAvatar name={profileName} size="sm" src={profileImage} />
+        <span className={cn("truncate", mobile ? "text-sm" : "text-sm")}>Profile</span>
+      </Link>
+      <button
+        aria-label="Log out of Quizora"
+        className={cn(
+          "flex h-full items-center justify-center border-l border-border px-3 text-muted-foreground transition hover:bg-danger/10 hover:text-danger",
+          mobile && "gap-2 px-4 text-sm font-semibold"
+        )}
+        disabled={loggingOut}
+        onClick={onLogout}
+        type="button"
+      >
+        <LogOut className="size-4" />
+        {mobile ? <span>Logout</span> : null}
+      </button>
+    </div>
+  );
+}
+
 export function Navbar() {
   const pathname = usePathname();
   const { user, profile, logout, authReady } = useAuth();
@@ -124,28 +174,18 @@ export function Navbar() {
 
   return (
     <header className="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur-xl">
-      <div className="container-page flex h-[4.5rem] items-center justify-between py-4">
-        <BrandLogo />
-        <nav className="hidden items-center gap-1 lg:flex">{nav}</nav>
-        <div className="hidden items-center gap-2 lg:flex">
+      <div className="container-page flex h-[4.5rem] items-center justify-between gap-4 py-4">
+        <BrandLogo className="shrink-0" />
+        <nav className="hidden min-w-0 flex-1 items-center justify-center gap-1 2xl:flex">{nav}</nav>
+        <div className="hidden shrink-0 items-center gap-2 2xl:flex">
           <ThemeToggle />
           {user ? (
-            <>
-              <Button
-                href="/profile"
-                icon={<UserAvatar name={profileName} size="sm" src={profileImage} />}
-                variant="secondary"
-              >
-                Profile
-              </Button>
-              <Button
-                icon={<LogOut className="size-4" />}
-                onClick={() => setConfirmLogout(true)}
-                variant="ghost"
-              >
-                Logout
-              </Button>
-            </>
+            <ProfileLogoutPill
+              loggingOut={loggingOut}
+              onLogout={() => setConfirmLogout(true)}
+              profileImage={profileImage}
+              profileName={profileName}
+            />
           ) : (
             <>
               <Button href="/login" variant="ghost">
@@ -157,7 +197,7 @@ export function Navbar() {
             </>
           )}
         </div>
-        <div className="flex items-center gap-2 lg:hidden">
+        <div className="flex items-center gap-2 2xl:hidden">
           <ThemeToggle />
           <button
             aria-expanded={open}
@@ -171,27 +211,19 @@ export function Navbar() {
         </div>
       </div>
       {open ? (
-        <div className="container-page pb-4 lg:hidden">
+        <div className="container-page pb-4 2xl:hidden">
           <div className="glass-panel grid max-h-[calc(100vh-6rem)] gap-2 overflow-y-auto rounded-3xl p-3">
             {nav}
             <div className="mt-2 grid gap-2 border-t border-border/70 pt-3">
               {user ? (
-                <>
-                  <Button
-                    href="/profile"
-                    icon={<UserAvatar name={profileName} size="sm" src={profileImage} />}
-                    variant="secondary"
-                  >
-                    Profile
-                  </Button>
-                  <Button
-                    icon={<LogOut className="size-4" />}
-                    onClick={() => setConfirmLogout(true)}
-                    variant="ghost"
-                  >
-                    Logout
-                  </Button>
-                </>
+                <ProfileLogoutPill
+                  loggingOut={loggingOut}
+                  mobile
+                  onLogout={() => setConfirmLogout(true)}
+                  onNavigate={() => setOpen(false)}
+                  profileImage={profileImage}
+                  profileName={profileName}
+                />
               ) : (
                 <>
                   <Button href="/login" variant="secondary">
