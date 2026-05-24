@@ -4,6 +4,7 @@ import {
   listSeoPublicCategories,
   listSeoPublicQuizzes
 } from "@/lib/firestore/seo-content";
+import { publicDocPages } from "@/lib/docs/content";
 import { sitemapEntry } from "@/lib/seo";
 
 export const revalidate = 3600;
@@ -15,6 +16,14 @@ const staticEntries: MetadataRoute.Sitemap = [
   sitemapEntry("/leaderboard", { changeFrequency: "hourly", priority: 0.6 }),
   sitemapEntry("/rooms", { changeFrequency: "hourly", priority: 0.6 }),
   sitemapEntry("/pricing", { changeFrequency: "weekly", priority: 0.7 }),
+  sitemapEntry("/docs", { changeFrequency: "weekly", priority: 0.7 }),
+  ...publicDocPages.map((page) =>
+    sitemapEntry(`/docs/${page.slug}`, {
+      changeFrequency: "monthly",
+      priority: 0.55,
+      lastModified: page.updatedAt
+    })
+  ),
   sitemapEntry("/privacy", { changeFrequency: "yearly", priority: 0.2 }),
   sitemapEntry("/terms", { changeFrequency: "yearly", priority: 0.2 }),
   sitemapEntry("/refund", { changeFrequency: "yearly", priority: 0.2 }),

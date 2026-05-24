@@ -18,7 +18,8 @@ const publicLinks = [
   { href: "/matchmaking", label: "Matchmaking" },
   { href: "/categories", label: "Categories" },
   { href: "/leaderboard", label: "Leaderboard" },
-  { href: "/pricing", label: "Pricing" }
+  { href: "/pricing", label: "Pricing" },
+  { href: "/docs", label: "Docs" }
 ];
 
 function Logo() {

@@ -109,6 +109,8 @@ function checkRoutes() {
     "src/app/quizzes/page.tsx",
     "src/app/leaderboard/page.tsx",
     "src/app/pricing/page.tsx",
+    "src/app/docs/page.tsx",
+    "src/app/docs/[slug]/page.tsx",
     "src/app/privacy/page.tsx",
     "src/app/terms/page.tsx",
     "src/app/refund/page.tsx",
