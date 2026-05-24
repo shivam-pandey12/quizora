@@ -15,6 +15,11 @@ export const metadata: Metadata = {
   alternates: {
     canonical: buildCanonicalUrl("/")
   },
+  icons: {
+    icon: "/logo.png",
+    shortcut: "/logo.png",
+    apple: "/logo.png"
+  },
   openGraph: {
     title: defaultTitle,
     description: defaultDescription,

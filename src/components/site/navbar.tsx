@@ -1,9 +1,10 @@
 "use client";
 
-import { LogOut, Menu, Trophy, X } from "lucide-react";
+import { LogOut, Menu, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { BrandLogo } from "@/components/site/brand-logo";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { UserAvatar } from "@/components/ui/user-avatar";
@@ -21,17 +22,6 @@ const publicLinks = [
   { href: "/pricing", label: "Pricing" },
   { href: "/docs", label: "Docs" }
 ];
-
-function Logo() {
-  return (
-    <Link className="flex items-center gap-3" href="/">
-      <span className="flex size-10 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-glow">
-        <Trophy className="size-5" />
-      </span>
-      <span className="text-lg font-bold tracking-normal">Quizora</span>
-    </Link>
-  );
-}
 
 export function Navbar() {
   const pathname = usePathname();
@@ -135,7 +125,7 @@ export function Navbar() {
   return (
     <header className="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur-xl">
       <div className="container-page flex h-[4.5rem] items-center justify-between py-4">
-        <Logo />
+        <BrandLogo />
         <nav className="hidden items-center gap-1 lg:flex">{nav}</nav>
         <div className="hidden items-center gap-2 lg:flex">
           <ThemeToggle />

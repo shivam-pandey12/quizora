@@ -1,5 +1,5 @@
-import { Trophy } from "lucide-react";
 import Link from "next/link";
+import { BrandLogo } from "@/components/site/brand-logo";
 
 const links = [
   { href: "/quizzes", label: "Quizzes" },
@@ -24,12 +24,7 @@ export function Footer() {
     <footer className="border-t border-border/70 bg-surface/55">
       <div className="container-page grid gap-8 py-10 md:grid-cols-[1.2fr_0.8fr] md:items-center">
         <div>
-          <div className="flex items-center gap-3">
-            <span className="flex size-10 items-center justify-center rounded-2xl bg-primary/12 text-primary">
-              <Trophy className="size-5" />
-            </span>
-            <p className="text-lg font-bold">Quizora</p>
-          </div>
+          <BrandLogo className="inline-flex" />
           <p className="mt-2 max-w-xl text-sm leading-6 text-muted-foreground">
             A premium quiz arena for solo mastery, live rooms, quick matches,
             leaderboards, and thoughtful progress tracking.
