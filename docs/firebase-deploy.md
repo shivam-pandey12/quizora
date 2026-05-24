@@ -62,7 +62,7 @@ Only run this after production secrets are configured in Firebase App Hosting or
 - Enable Email/Password if normal registration is used.
 - Enable Google only if production login should support it.
 - Add `localhost` for dev and the production domain to Firebase Auth authorized domains.
-- Register the first admin, then set `users/{uid}.role = "admin"` in Firestore or use the configured bootstrap admin path.
+- Register the first admin, then set `users/{uid}.role = "admin"` in Firestore from the Firebase Console or a trusted Admin SDK script.
 - Long term: move admin authority to custom claims.
 
 ## Missing Index Workflow

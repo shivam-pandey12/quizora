@@ -26,7 +26,7 @@ Phase 7 uses real Firestore-backed content, saved quiz attempts, leaderboard ent
 ## Security Notes
 
 - Public reads should be limited to `published` + `public` quizzes and `active` categories.
-- Admin writes currently rely on a `users/{uid}.role == "admin"` rule check and client-side `AdminGate`.
+- Admin writes currently rely on a `users/{uid}.role == "admin"` rule check plus admin route guards.
 - Serious production hardening should add custom claims or trusted server validation before expanding admin workflows.
 - Correct answers are still stored in `questions`. Public quiz detail pages do not load them, but the Phase 3 client play engine reads active questions for scoring, so competitive anti-cheat is not complete.
 - Result pages use `attempts.answers` snapshots instead of live question documents so historical reviews survive question edits.

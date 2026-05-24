@@ -1,6 +1,6 @@
 "use client";
 
-import { LockKeyhole, ShieldAlert, ShieldCheck } from "lucide-react";
+import { LockKeyhole, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
@@ -56,7 +56,7 @@ export function AdminGate({ children }: { children: React.ReactNode }) {
         <EmptyState
           icon={ShieldAlert}
           title="Access denied"
-          description="This account is signed in but does not have the admin role. Quizora currently checks profile.role on the client; production hardening still needs custom claims, server validation, and deployed/tested Firestore rules."
+          description="This account is signed in but does not have the admin role in its Quizora user profile."
         />
         <div className="flex justify-center">
           <Button href="/dashboard" variant="secondary">
@@ -67,18 +67,5 @@ export function AdminGate({ children }: { children: React.ReactNode }) {
     );
   }
 
-  return (
-    <div className="space-y-4">
-      <div className="rounded-3xl border border-primary/20 bg-primary/10 p-4 text-sm text-primary">
-        <div className="flex gap-3">
-          <ShieldCheck className="mt-0.5 size-5 shrink-0" />
-          <p>
-            Admin access loaded from your user profile or bootstrap admin email.
-            This is client-side gating and must be hardened with claims/server validation before serious production use.
-          </p>
-        </div>
-      </div>
-      {children}
-    </div>
-  );
+  return children;
 }

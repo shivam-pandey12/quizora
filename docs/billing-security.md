@@ -12,4 +12,4 @@ Required guarantees:
 - Do not store full card, bank, or sensitive Razorpay payloads in client-readable Firestore.
 - Log manual billing admin actions.
 
-Current limitation: admin authority still follows the current Quizora admin profile strategy plus bootstrap email. Future production hardening should move sensitive admin authority to Firebase custom claims and trusted server/Admin SDK workflows.
+Current limitation: admin authority still follows the current Quizora admin profile-role strategy. Future production hardening should move sensitive admin authority to Firebase custom claims and trusted server/Admin SDK workflows.

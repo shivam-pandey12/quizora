@@ -37,7 +37,7 @@ Future hardening:
 
 ## Admin Authority
 
-Quizora still uses `users/{uid}.role == "admin"` plus the bootstrap admin email strategy for admin checks. Users cannot self-change role under the rules except the configured bootstrap flow, but custom claims remain the recommended production authority model.
+Quizora uses `users/{uid}.role == "admin"` for admin checks. Users cannot self-change role under the rules; the first admin must be granted from the Firebase Console or a trusted Admin SDK script. Custom claims remain the recommended production authority model.
 
 Future hardening:
 

@@ -48,4 +48,4 @@ The Phase 14 rules are designed to protect client SDK access while trusted Next.
 - Serious production hardening should move admin roles to custom claims and sensitive writes to trusted backend code.
 - Phase 11 admin audit logs are client best-effort; server-side logs are recommended for production-grade accountability.
 - Phase 13 API routes use Firebase Admin SDK, so server writes bypass Firestore rules. Rules still protect every client SDK billing read/write path.
-- Current admin authority is still profile-role based plus bootstrap email. Custom claims should replace this for high-stakes billing operations.
+- Current admin authority is still profile-role based. Custom claims should replace this for high-stakes billing operations.

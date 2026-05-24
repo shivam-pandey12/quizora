@@ -192,7 +192,7 @@ export function getAdminUnlockedPlan(): BillingPlan {
     ...classroom,
     id: "classroom",
     name: "Admin unlocked",
-    description: "Bootstrap admin override with every Quizora premium feature unlocked.",
+    description: "Admin profile access with every Quizora premium feature unlocked.",
     bestFor: "Quizora admin",
     priceINR: 0,
     billingType: "free",

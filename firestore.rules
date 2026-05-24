@@ -18,24 +18,10 @@ service cloud.firestore {
       return userPath(request.auth.uid);
     }
 
-    function isBootstrapAdminEmail() {
-      return signedIn()
-        && request.auth.token.email != null
-        && (
-          request.auth.token.email == 'shivam63pandey@gmail.com'
-          || request.auth.token.email == 'shivam63pandey@Gmail.com'
-        );
-    }
-
     function isAdmin() {
       return signedIn()
-        && (
-          isBootstrapAdminEmail()
-          || (
-            exists(adminProfilePath())
-            && get(adminProfilePath()).data.role == 'admin'
-          )
-        );
+        && exists(adminProfilePath())
+        && get(adminProfilePath()).data.role == 'admin';
     }
 
     function hasCreatorAccess() {
@@ -364,11 +350,7 @@ service cloud.firestore {
     }
 
     function userProfileRoleAllowed(data) {
-      return data.role == 'user'
-        || (
-          data.role == 'admin'
-          && isBootstrapAdminEmail()
-        );
+      return data.role == 'user';
     }
 
     function userProfileUpdateShape(data, uid) {
@@ -415,18 +397,10 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'displayName',
           'photoURL',
-          'role',
           'lastActiveAt',
           'updatedAt'
         ])
-        && (
-          request.resource.data.role == resource.data.role
-          || (
-            isBootstrapAdminEmail()
-            && resource.data.role == 'user'
-            && request.resource.data.role == 'admin'
-          )
-        )
+        && request.resource.data.role == resource.data.role
         && userProfileUpdateShape(request.resource.data, uid);
     }
 

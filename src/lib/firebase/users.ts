@@ -7,7 +7,6 @@ import {
   updateDoc
 } from "firebase/firestore";
 import { db, firebaseSetupMessage } from "@/lib/firebase/client";
-import { isBootstrapAdminEmail } from "@/lib/auth/admin-access";
 import { toIso } from "@/lib/firestore/timestamps";
 import { normalizeBadges } from "@/lib/quiz/gamification";
 import type { UserProfile, UserRole } from "@/types/domain";
@@ -102,12 +101,11 @@ export async function createOrGetUserProfile(user: User): Promise<UserProfile> {
     email: user.email || "",
     photoURL: user.photoURL || null
   };
-  const bootstrapRole: UserRole = isBootstrapAdminEmail(user.email) ? "admin" : "user";
 
   if (!snapshot.exists()) {
     const profileSeed = {
       ...identityFields,
-      role: bootstrapRole,
+      role: "user" satisfies UserRole,
       xp: 0,
       level: 1,
       totalQuizzesPlayed: 0,
@@ -168,9 +166,6 @@ export async function createOrGetUserProfile(user: User): Promise<UserProfile> {
   }
   if (existing.photoURL !== identityFields.photoURL) {
     updatePayload.photoURL = identityFields.photoURL;
-  }
-  if (bootstrapRole === "admin" && existing.role !== "admin") {
-    updatePayload.role = "admin";
   }
   if (shouldRefreshLastActive(existing.lastActiveAt)) {
     updatePayload.lastActiveAt = serverTimestamp();
