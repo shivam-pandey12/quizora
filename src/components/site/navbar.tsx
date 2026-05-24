@@ -1,6 +1,22 @@
 "use client";
 
-import { LogOut, Menu, X } from "lucide-react";
+import {
+  BookOpen,
+  ChevronDown,
+  CreditCard,
+  DoorOpen,
+  GraduationCap,
+  LayoutDashboard,
+  LibraryBig,
+  LogOut,
+  Menu,
+  ShieldCheck,
+  Sparkles,
+  Trophy,
+  UsersRound,
+  X
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
@@ -13,14 +29,80 @@ import { useAuth } from "@/lib/auth/auth-provider";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "./theme-toggle";
 
-const publicLinks = [
-  { href: "/quizzes", label: "Quizzes" },
-  { href: "/rooms", label: "Rooms" },
-  { href: "/matchmaking", label: "Matchmaking" },
-  { href: "/categories", label: "Categories" },
-  { href: "/leaderboard", label: "Leaderboard" },
-  { href: "/pricing", label: "Pricing" },
-  { href: "/docs", label: "Docs" }
+interface NavMenuItem {
+  href: string;
+  label: string;
+  description: string;
+  icon: LucideIcon;
+}
+
+interface NavMenuGroup {
+  id: string;
+  label: string;
+  items: NavMenuItem[];
+}
+
+const publicNavGroups: NavMenuGroup[] = [
+  {
+    id: "explore",
+    label: "Explore",
+    items: [
+      {
+        href: "/quizzes",
+        label: "Quizzes",
+        description: "Browse published quiz packs",
+        icon: LibraryBig
+      },
+      {
+        href: "/categories",
+        label: "Categories",
+        description: "Find quizzes by subject lane",
+        icon: BookOpen
+      },
+      {
+        href: "/docs",
+        label: "Docs",
+        description: "Learn how Quizora works",
+        icon: Sparkles
+      }
+    ]
+  },
+  {
+    id: "compete",
+    label: "Compete",
+    items: [
+      {
+        href: "/rooms",
+        label: "Rooms",
+        description: "Create or join live quiz rooms",
+        icon: DoorOpen
+      },
+      {
+        href: "/matchmaking",
+        label: "Matchmaking",
+        description: "Find a quick casual match",
+        icon: UsersRound
+      },
+      {
+        href: "/leaderboard",
+        label: "Leaderboard",
+        description: "Compare trusted public scores",
+        icon: Trophy
+      }
+    ]
+  },
+  {
+    id: "plans",
+    label: "Plans",
+    items: [
+      {
+        href: "/pricing",
+        label: "Pricing",
+        description: "Compare Free, Plus, Creator, and Classroom",
+        icon: CreditCard
+      }
+    ]
+  }
 ];
 
 function ProfileLogoutPill({
@@ -73,10 +155,84 @@ function ProfileLogoutPill({
   );
 }
 
+function NavDropdown({
+  active,
+  group,
+  onClose,
+  onOpen,
+  open
+}: {
+  active: boolean;
+  group: NavMenuGroup;
+  onClose: () => void;
+  onOpen: () => void;
+  open: boolean;
+}) {
+  return (
+    <div
+      className="relative"
+      onMouseEnter={onOpen}
+      onMouseLeave={onClose}
+    >
+      <button
+        aria-expanded={open}
+        aria-haspopup="menu"
+        className={cn(
+          "inline-flex h-11 items-center gap-2 rounded-full px-4 text-sm font-semibold text-muted-foreground transition hover:bg-primary/10 hover:text-foreground",
+          (active || open) && "bg-primary/10 text-primary"
+        )}
+        onClick={() => (open ? onClose() : onOpen())}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") onClose();
+        }}
+        type="button"
+      >
+        {group.label}
+        <ChevronDown
+          className={cn("size-4 transition duration-200", open && "rotate-180")}
+        />
+      </button>
+      {open ? (
+        <div className="absolute left-1/2 top-full z-50 w-[22rem] -translate-x-1/2 pt-3">
+          <div className="nav-dropdown-panel rounded-[1.7rem] border border-border bg-surface/95 p-2 shadow-premium backdrop-blur-xl dark:bg-surface/95">
+            <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-primary/70 to-transparent" />
+            {group.items.map((item, index) => {
+              const Icon = item.icon;
+              return (
+                <Link
+                  className={cn(
+                    "nav-dropdown-link flex items-start gap-3 rounded-[1.25rem] p-3 transition hover:bg-primary/10 focus-visible:bg-primary/10",
+                    active && "text-foreground"
+                  )}
+                  href={item.href}
+                  key={item.href}
+                  onClick={onClose}
+                  style={{ animationDelay: `${index * 42}ms` }}
+                >
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                    <Icon className="size-5" />
+                  </span>
+                  <span>
+                    <span className="block text-sm font-bold text-foreground">{item.label}</span>
+                    <span className="mt-0.5 block text-xs leading-5 text-muted-foreground">
+                      {item.description}
+                    </span>
+                  </span>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function Navbar() {
   const pathname = usePathname();
   const { user, profile, logout, authReady } = useAuth();
   const [open, setOpen] = useState(false);
+  const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const adminOverride = hasAdminAccess({ email: user?.email, profile });
@@ -84,6 +240,62 @@ export function Navbar() {
   const profileName = profile?.displayName || user?.displayName || "Quizora Player";
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
+
+  const workspaceItems: NavMenuItem[] = user
+    ? [
+        {
+          href: "/dashboard",
+          label: "Dashboard",
+          description: "Review progress and recent attempts",
+          icon: LayoutDashboard
+        },
+        {
+          href: "/classes",
+          label: "Classes",
+          description: "Open student class spaces",
+          icon: GraduationCap
+        },
+        {
+          href: "/billing",
+          label: "Billing",
+          description: "View plan access and payments",
+          icon: CreditCard
+        },
+        ...(adminOverride || profile?.creatorStatus === "approved"
+          ? [
+              {
+                href: "/creator",
+                label: "Creator",
+                description: "Manage classes and creator drafts",
+                icon: Sparkles
+              }
+            ]
+          : []),
+        ...(adminOverride
+          ? [
+              {
+                href: "/admin",
+                label: "Admin",
+                description: "Open Quizora Studio controls",
+                icon: ShieldCheck
+              }
+            ]
+          : [])
+      ]
+    : [];
+
+  const navGroups: NavMenuGroup[] = [
+    ...publicNavGroups,
+    ...(workspaceItems.length
+      ? [
+          {
+            id: "workspace",
+            label: "Workspace",
+            items: workspaceItems
+          }
+        ]
+      : [])
+  ];
 
   async function confirmAndLogout() {
     setLoggingOut(true);
@@ -98,77 +310,30 @@ export function Navbar() {
 
   const nav = (
     <>
-      {publicLinks.map((link) => (
-        <Link
-          className={cn(
-            "rounded-full px-3 py-2 text-sm font-semibold text-muted-foreground transition hover:bg-primary/10 hover:text-foreground",
-            isActive(link.href) && "bg-primary/10 text-primary"
-          )}
-          href={link.href}
-          key={link.href}
-          onClick={() => setOpen(false)}
-        >
-          {link.label}
-        </Link>
+      {navGroups.map((group) => (
+        <div className="space-y-1 lg:hidden" key={group.id}>
+          <p className="px-3 text-xs font-bold uppercase tracking-[0.16em] text-muted-foreground">
+            {group.label}
+          </p>
+          {group.items.map((item) => {
+            const Icon = item.icon;
+            return (
+              <Link
+                className={cn(
+                  "flex items-center gap-3 rounded-2xl px-3 py-2 text-sm font-semibold text-muted-foreground transition hover:bg-primary/10 hover:text-foreground",
+                  isActive(item.href) && "bg-primary/10 text-primary"
+                )}
+                href={item.href}
+                key={item.href}
+                onClick={() => setOpen(false)}
+              >
+                <Icon className="size-4" />
+                {item.label}
+              </Link>
+            );
+          })}
+        </div>
       ))}
-      {user ? (
-        <>
-          <Link
-            className={cn(
-              "rounded-full px-3 py-2 text-sm font-semibold text-muted-foreground transition hover:bg-primary/10 hover:text-foreground",
-              isActive("/dashboard") && "bg-primary/10 text-primary"
-            )}
-            href="/dashboard"
-            onClick={() => setOpen(false)}
-          >
-            Dashboard
-          </Link>
-          <Link
-            className={cn(
-              "rounded-full px-3 py-2 text-sm font-semibold text-muted-foreground transition hover:bg-primary/10 hover:text-foreground",
-              isActive("/classes") && "bg-primary/10 text-primary"
-            )}
-            href="/classes"
-            onClick={() => setOpen(false)}
-          >
-            Classes
-          </Link>
-          <Link
-            className={cn(
-              "rounded-full px-3 py-2 text-sm font-semibold text-muted-foreground transition hover:bg-primary/10 hover:text-foreground",
-              isActive("/billing") && "bg-primary/10 text-primary"
-            )}
-            href="/billing"
-            onClick={() => setOpen(false)}
-          >
-            Billing
-          </Link>
-          {adminOverride || profile?.creatorStatus === "approved" ? (
-            <Link
-              className={cn(
-                "rounded-full px-3 py-2 text-sm font-semibold text-muted-foreground transition hover:bg-primary/10 hover:text-foreground",
-                isActive("/creator") && "bg-primary/10 text-primary"
-              )}
-              href="/creator"
-              onClick={() => setOpen(false)}
-            >
-              Creator
-            </Link>
-          ) : null}
-          {adminOverride ? (
-            <Link
-              className={cn(
-                "rounded-full px-3 py-2 text-sm font-semibold text-muted-foreground transition hover:bg-primary/10 hover:text-foreground",
-                isActive("/admin") && "bg-primary/10 text-primary"
-              )}
-              href="/admin"
-              onClick={() => setOpen(false)}
-            >
-              Admin
-            </Link>
-          ) : null}
-        </>
-      ) : null}
     </>
   );
 
@@ -176,7 +341,18 @@ export function Navbar() {
     <header className="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur-xl">
       <div className="container-page flex h-[4.5rem] items-center justify-between gap-4 py-4">
         <BrandLogo className="shrink-0" />
-        <nav className="hidden min-w-0 flex-1 items-center justify-center gap-1 lg:flex">{nav}</nav>
+        <nav className="hidden min-w-0 flex-1 items-center justify-center gap-1 lg:flex">
+          {navGroups.map((group) => (
+            <NavDropdown
+              active={group.items.some((item) => isActive(item.href))}
+              group={group}
+              key={group.id}
+              onClose={() => setOpenMenu((current) => (current === group.id ? null : current))}
+              onOpen={() => setOpenMenu(group.id)}
+              open={openMenu === group.id}
+            />
+          ))}
+        </nav>
         <div className="hidden shrink-0 items-center gap-2 lg:flex">
           <ThemeToggle />
           {user ? (
