@@ -101,11 +101,12 @@ export async function createOrGetUserProfile(user: User): Promise<UserProfile> {
     email: user.email || "",
     photoURL: user.photoURL || null
   };
+  const defaultRole: UserRole = "user";
 
   if (!snapshot.exists()) {
     const profileSeed = {
       ...identityFields,
-      role: "user" satisfies UserRole,
+      role: defaultRole,
       xp: 0,
       level: 1,
       totalQuizzesPlayed: 0,
