@@ -176,8 +176,8 @@ export function Navbar() {
     <header className="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur-xl">
       <div className="container-page flex h-[4.5rem] items-center justify-between gap-4 py-4">
         <BrandLogo className="shrink-0" />
-        <nav className="hidden min-w-0 flex-1 items-center justify-center gap-1 2xl:flex">{nav}</nav>
-        <div className="hidden shrink-0 items-center gap-2 2xl:flex">
+        <nav className="hidden min-w-0 flex-1 items-center justify-center gap-1 lg:flex">{nav}</nav>
+        <div className="hidden shrink-0 items-center gap-2 lg:flex">
           <ThemeToggle />
           {user ? (
             <ProfileLogoutPill
@@ -197,7 +197,7 @@ export function Navbar() {
             </>
           )}
         </div>
-        <div className="flex items-center gap-2 2xl:hidden">
+        <div className="flex items-center gap-2 lg:hidden">
           <ThemeToggle />
           <button
             aria-expanded={open}
@@ -211,7 +211,7 @@ export function Navbar() {
         </div>
       </div>
       {open ? (
-        <div className="container-page pb-4 2xl:hidden">
+        <div className="container-page pb-4 lg:hidden">
           <div className="glass-panel grid max-h-[calc(100vh-6rem)] gap-2 overflow-y-auto rounded-3xl p-3">
             {nav}
             <div className="mt-2 grid gap-2 border-t border-border/70 pt-3">
