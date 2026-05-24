@@ -1,0 +1,23 @@
+# Quizora Phase 2 Testing Checklist
+
+- Run `npm run typecheck`.
+- Run `npm run lint`.
+- Run `npm run build`.
+- Verify missing Firebase config:
+  - Public pages render sample/setup states.
+  - Auth/admin pages show setup messages.
+  - Build does not crash.
+- Verify admin gates:
+  - Logged-out users cannot use admin tools.
+  - Non-admin profiles see access denied.
+  - Profiles with `role: "admin"` can access admin pages.
+- Verify admin content:
+  - Create, edit, hide, unhide, and safely delete/hide categories.
+  - Create, edit, publish, unpublish, and archive quizzes.
+  - Add, edit, hide, delete, and reorder questions.
+  - Publishing is blocked without required fields and at least one active question.
+- Verify public content:
+  - `/quizzes` shows only published public quizzes.
+  - `/quizzes/[slug]` shows only published public quizzes and does not fetch correct answers.
+  - `/categories` shows active categories only.
+  - `/categories/[slug]` shows active categories and their published public quizzes.

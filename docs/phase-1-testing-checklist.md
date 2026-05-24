@@ -1,0 +1,28 @@
+# Quizora Phase 1 Testing Checklist
+
+- Install dependencies with `npm install`.
+- Run `npm run typecheck`.
+- Run `npm run lint`.
+- Run `npm run build`.
+- Run `npm run dev` and verify:
+  - `/`
+  - `/quizzes`
+  - `/quizzes/world-logic-sprint`
+  - `/categories`
+  - `/leaderboard`
+  - `/login`
+  - `/register`
+  - `/dashboard`
+  - `/profile`
+  - `/admin`
+  - `/admin/quizzes`
+  - `/admin/categories`
+  - `/admin/users`
+  - `/admin/attempts`
+  - `/admin/rooms`
+  - `/admin/settings`
+- Confirm missing Firebase env values do not crash the app.
+- Confirm auth forms show the Firebase setup message when env values are missing.
+- Confirm protected routes show a premium setup/auth gate instead of blank pages.
+- Confirm quiz detail start action is disabled and marked for Phase 2.
+- Confirm no full gameplay, admin CRUD, real leaderboard writes, live rooms, payments, or advanced analytics exist.
