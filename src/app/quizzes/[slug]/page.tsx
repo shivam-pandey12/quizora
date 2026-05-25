@@ -47,7 +47,7 @@ export async function generateMetadata({ params }: QuizDetailPageProps): Promise
         quiz.description ||
         `${quiz.categoryName} quiz on Quizora with ${quiz.questionCount} questions.`,
       path: `/quizzes/${quiz.slug}`,
-      image: quiz.thumbnailUrl
+      image: quiz.coverImageUrl || quiz.thumbnailUrl
     });
   } catch {
     return unavailableMetadata(

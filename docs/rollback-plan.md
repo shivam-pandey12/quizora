@@ -15,6 +15,7 @@
 
 ```bash
 firebase deploy --only firestore:rules
+firebase deploy --only storage
 ```
 
 ## Index Rollback
@@ -40,4 +41,3 @@ Billing and trusted scoring do not have a full production kill-switch service in
 - Preserve soft-archive/hidden content over deletion.
 - Use admin import/export tools for content recovery when practical.
 - Payment and entitlement records should be corrected through admin entitlement tools, not direct client writes.
-

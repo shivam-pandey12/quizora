@@ -19,7 +19,14 @@ import { hasAdminAccess } from "@/lib/auth/admin-access";
 import { db, firebaseSetupMessage } from "@/lib/firebase/client";
 import { mapCreatorRequest, mapQuestion, mapQuiz } from "@/lib/firestore/mappers";
 import { createSlug } from "@/lib/firestore/slug";
-import { validateQuestionInput, validateQuizInput } from "@/lib/firestore/validation";
+import { validateQuizInput } from "@/lib/firestore/validation";
+import {
+  creatorMaxOptions,
+  normalizeQuestion,
+  optionQuestionTypes,
+  trueFalseOptions,
+  validateQuestionByType
+} from "@/lib/quiz/question-engine";
 import type {
   Category,
   CreatorRequest,
@@ -211,6 +218,10 @@ export function creatorQuizDraftInput({
     status: "draft",
     visibility: "private",
     thumbnailUrl: "",
+    coverImageUrl: "",
+    coverImagePath: "",
+    coverImageAlt: "",
+    coverImageCaption: "",
     tags,
     estimatedMinutes,
     timeLimitSeconds,
@@ -298,25 +309,34 @@ export async function listCreatorQuestions(quizId: string): Promise<Question[]> 
 }
 
 export function creatorQuestionInput(input: QuestionInput): QuestionInput {
+  const normalized = normalizeQuestion(input);
   const options =
-    input.type === "true-false"
-      ? [
-          { id: "true", text: "True" },
-          { id: "false", text: "False" }
-        ]
-      : input.options.filter((option) => option.text.trim());
+    normalized.type === "true-false"
+      ? trueFalseOptions()
+      : optionQuestionTypes.includes(normalized.type) || normalized.type === "multiple-choice"
+        ? normalized.options.filter((option) => option.text.trim() || option.imageUrl?.trim()).slice(0, creatorMaxOptions)
+        : [];
+  const correctOptionIds = (normalized.correctOptionIds ?? normalized.correctAnswers ?? []).filter((answer) =>
+    options.some((option) => option.id === answer)
+  );
+  const correctOptionId =
+    options.some((option) => option.id === (normalized.correctOptionId || normalized.correctAnswer))
+      ? normalized.correctOptionId || normalized.correctAnswer
+      : "";
 
   return {
-    ...input,
+    ...normalized,
     options,
+    correctOptionId,
+    correctOptionIds,
     correctAnswers:
-      input.type === "multiple-choice"
-        ? input.correctAnswers.filter((answer) => options.some((option) => option.id === answer))
+      normalized.type === "multiple-choice"
+        ? correctOptionIds
         : [],
     correctAnswer:
-      input.type === "multiple-choice" ? "" : input.correctAnswer,
-    explanation: input.explanation.trim(),
-    questionText: input.questionText.trim()
+      normalized.type === "multiple-choice" ? "" : correctOptionId || normalized.correctText || normalized.correctAnswer,
+    explanation: normalized.explanation.trim(),
+    questionText: normalized.questionText.trim()
   };
 }
 
@@ -332,7 +352,7 @@ async function refreshCreatorQuizStats(quizId: string) {
 
 export async function createCreatorQuestion(input: QuestionInput) {
   const normalized = creatorQuestionInput(input);
-  const validation = validateQuestionInput(normalized);
+  const validation = validateQuestionByType(normalized, { maxOptions: creatorMaxOptions });
   if (!validation.valid) throw new Error(Object.values(validation.errors)[0]);
   if (!normalized.explanation) throw new Error("Add an explanation before saving.");
 
@@ -347,7 +367,7 @@ export async function createCreatorQuestion(input: QuestionInput) {
 
 export async function updateCreatorQuestion(questionId: string, input: QuestionInput) {
   const normalized = creatorQuestionInput(input);
-  const validation = validateQuestionInput(normalized);
+  const validation = validateQuestionByType(normalized, { maxOptions: creatorMaxOptions });
   if (!validation.valid) throw new Error(Object.values(validation.errors)[0]);
   if (!normalized.explanation) throw new Error("Add an explanation before saving.");
 

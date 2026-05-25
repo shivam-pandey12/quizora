@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ImageDisplay } from "@/components/ui/image-display";
 import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
 import { SectionHeader } from "@/components/ui/section-header";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -103,6 +104,9 @@ export function FirestoreQuizDetail({
   const categoryName = quiz.categoryName;
   const timeLimitSeconds = "timeLimitSeconds" in quiz ? quiz.timeLimitSeconds : quiz.timeLimitSeconds;
   const totalPoints = quiz.totalPoints ?? 0;
+  const coverImage = ("coverImageUrl" in quiz ? quiz.coverImageUrl : undefined) || ("thumbnailUrl" in quiz ? quiz.thumbnailUrl : undefined);
+  const coverAlt = ("coverImageAlt" in quiz ? quiz.coverImageAlt : undefined) || quiz.title;
+  const coverCaption = "coverImageCaption" in quiz ? quiz.coverImageCaption : undefined;
   const canStart = Boolean(!setupMode && quiz.id && quiz.questionCount > 0);
   const startDisabledReason = setupMode
     ? "Configure Firebase to play"
@@ -244,73 +248,84 @@ export function FirestoreQuizDetail({
               </div>
             ) : null}
           </div>
-          <Card className="p-5">
-            <p className="text-sm font-semibold uppercase text-primary">Play ready</p>
-            <h2 className="mt-2 text-2xl font-semibold">Start the real quiz engine</h2>
-            <p className="mt-3 text-sm leading-6 text-muted-foreground">
-              Quizora saves a private attempt, calculates your score, awards XP,
-              and unlocks the answer review after final submission.
-            </p>
-            {canStart ? (
-              <div className="mt-5 grid gap-3">
-                <Button fullWidth href={`/play/${quiz.id}`} icon={<PlayCircle className="size-4" />}>
-                  Start Quiz
-                </Button>
-                {user ? (
-                  <Button
-                    disabled={challengeWorking}
-                    fullWidth
-                    icon={<Swords className="size-4" />}
-                    onClick={() => void createChallenge()}
-                    variant="secondary"
-                  >
-                    Challenge Friends
+          <div className="grid gap-4">
+            {coverImage ? (
+              <ImageDisplay
+                alt={coverAlt}
+                caption={coverCaption}
+                className="shadow-soft"
+                imageClassName="max-h-72 object-cover"
+                src={coverImage}
+              />
+            ) : null}
+            <Card className="p-5">
+              <p className="text-sm font-semibold uppercase text-primary">Play ready</p>
+              <h2 className="mt-2 text-2xl font-semibold">Start the real quiz engine</h2>
+              <p className="mt-3 text-sm leading-6 text-muted-foreground">
+                Quizora saves a private attempt, calculates your score, awards XP,
+                and unlocks the answer review after final submission.
+              </p>
+              {canStart ? (
+                <div className="mt-5 grid gap-3">
+                  <Button fullWidth href={`/play/${quiz.id}`} icon={<PlayCircle className="size-4" />}>
+                    Start Quiz
                   </Button>
-                ) : (
+                  {user ? (
+                    <Button
+                      disabled={challengeWorking}
+                      fullWidth
+                      icon={<Swords className="size-4" />}
+                      onClick={() => void createChallenge()}
+                      variant="secondary"
+                    >
+                      Challenge Friends
+                    </Button>
+                  ) : (
+                    <Button
+                      fullWidth
+                      href={`/login?next=${encodeURIComponent(`/quizzes/${slug}`)}`}
+                      icon={<Swords className="size-4" />}
+                      variant="secondary"
+                    >
+                      Sign in to Challenge
+                    </Button>
+                  )}
                   <Button
                     fullWidth
-                    href={`/login?next=${encodeURIComponent(`/quizzes/${slug}`)}`}
-                    icon={<Swords className="size-4" />}
-                    variant="secondary"
-                  >
-                    Sign in to Challenge
-                  </Button>
-                )}
-                <Button
-                  fullWidth
-                  icon={<Share2 className="size-4" />}
-                  onClick={() => void shareQuiz()}
-                  variant="ghost"
-                >
-                  Share Quiz
-                </Button>
-                {user ? (
-                  <Button
-                    disabled={reportWorking}
-                    fullWidth
-                    onClick={() => void reportQuiz()}
+                    icon={<Share2 className="size-4" />}
+                    onClick={() => void shareQuiz()}
                     variant="ghost"
                   >
-                    Report Quiz
+                    Share Quiz
                   </Button>
-                ) : null}
-              </div>
-            ) : (
-              <div className="mt-5 grid gap-3">
-                <Button disabled fullWidth icon={<Lock className="size-4" />}>
-                  {startDisabledReason}
-                </Button>
-                <Button
-                  fullWidth
-                  icon={<Copy className="size-4" />}
-                  onClick={() => void shareQuiz()}
-                  variant="secondary"
-                >
-                  Copy Quiz Link
-                </Button>
-              </div>
-            )}
-          </Card>
+                  {user ? (
+                    <Button
+                      disabled={reportWorking}
+                      fullWidth
+                      onClick={() => void reportQuiz()}
+                      variant="ghost"
+                    >
+                      Report Quiz
+                    </Button>
+                  ) : null}
+                </div>
+              ) : (
+                <div className="mt-5 grid gap-3">
+                  <Button disabled fullWidth icon={<Lock className="size-4" />}>
+                    {startDisabledReason}
+                  </Button>
+                  <Button
+                    fullWidth
+                    icon={<Copy className="size-4" />}
+                    onClick={() => void shareQuiz()}
+                    variant="secondary"
+                  >
+                    Copy Quiz Link
+                  </Button>
+                </div>
+              )}
+            </Card>
+          </div>
         </div>
       </section>
 

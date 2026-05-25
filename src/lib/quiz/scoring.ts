@@ -4,6 +4,11 @@ import type {
   QuizAnswerState,
   ScoreResult
 } from "@/types/domain";
+import {
+  isSkippedAnswer as isSkippedAnswerByType,
+  normalizeQuestion,
+  scoreQuestionAnswer
+} from "@/lib/quiz/question-engine";
 
 export function sameSet(first: string[], second: string[]) {
   if (first.length !== second.length) return false;
@@ -13,12 +18,7 @@ export function sameSet(first: string[], second: string[]) {
 }
 
 export function isSkippedAnswer(answer: QuizAnswerState | undefined) {
-  if (!answer) return true;
-  return (
-    !answer.selectedAnswer &&
-    answer.selectedAnswers.length === 0 &&
-    !answer.textAnswer.trim()
-  );
+  return isSkippedAnswerByType(answer);
 }
 
 export function scoreQuizAttempt(
@@ -27,51 +27,53 @@ export function scoreQuizAttempt(
 ): ScoreResult {
   const scoredAnswers: AttemptAnswer[] = questions.map((question) => {
     const answer = answers[question.id];
-    const skipped = isSkippedAnswer(answer);
-    let isCorrect = false;
-
-    if (!skipped) {
-      if (question.type === "single-choice" || question.type === "true-false") {
-        isCorrect = answer?.selectedAnswer === question.correctAnswer;
-      }
-
-      if (question.type === "multiple-choice") {
-        isCorrect = sameSet(answer?.selectedAnswers ?? [], question.correctAnswers);
-      }
-
-      if (question.type === "text" && question.correctAnswer) {
-        isCorrect =
-          answer?.textAnswer.trim().toLowerCase() ===
-          question.correctAnswer.trim().toLowerCase();
-      }
-    }
+    const normalizedQuestion = normalizeQuestion(question);
+    const scored = scoreQuestionAnswer(normalizedQuestion, answer);
 
     return {
-      questionId: question.id,
-      questionTextSnapshot: question.questionText,
-      type: question.type,
-      selectedAnswer:
-        question.type === "text" ? answer?.textAnswer.trim() ?? "" : answer?.selectedAnswer ?? "",
-      selectedAnswers: answer?.selectedAnswers ?? [],
-      correctAnswer: question.correctAnswer,
-      correctAnswers: question.correctAnswers,
-      isCorrect,
-      pointsEarned: isCorrect ? question.points : 0,
-      pointsPossible: question.points,
+      questionId: normalizedQuestion.id,
+      questionTextSnapshot: normalizedQuestion.questionText,
+      type: normalizedQuestion.type,
+      selectedAnswer: scored.selectedAnswer,
+      selectedAnswers: scored.selectedAnswers,
+      correctAnswer: scored.correctAnswer,
+      correctAnswers: scored.correctAnswers,
+      selectedAnswerSummary: scored.selectedAnswerSummary,
+      correctAnswerSummary: scored.correctAnswerSummary,
+      textAnswer: scored.textAnswer,
+      numericAnswer: scored.numericAnswer,
+      blankAnswers: scored.blankAnswers,
+      correctBlankAnswers: scored.correctBlankAnswers,
+      matchingAnswers: scored.matchingAnswers,
+      correctMatchingAnswers: scored.correctMatchingAnswers,
+      orderingAnswerIds: scored.orderingAnswerIds,
+      correctOrderIds: scored.correctOrderIds,
+      skipped: scored.skipped,
+      isCorrect: scored.isCorrect,
+      pointsEarned: scored.pointsEarned,
+      pointsPossible: scored.pointsPossible,
       timeSpentSeconds: Math.max(0, answer?.timeSpentSeconds ?? 0),
-      explanationSnapshot: question.explanation,
-      optionsSnapshot: question.options
+      explanationSnapshot: normalizedQuestion.explanation,
+      questionImageUrl: normalizedQuestion.imageUrl,
+      questionImageAlt: normalizedQuestion.imageAlt,
+      questionImageCaption: normalizedQuestion.imageCaption,
+      optionsSnapshot: normalizedQuestion.options,
+      blanksSnapshot: normalizedQuestion.blanks,
+      matchPairsSnapshot: normalizedQuestion.matchPairs,
+      orderItemsSnapshot: normalizedQuestion.orderItems,
+      unit: normalizedQuestion.unit,
+      tolerance: normalizedQuestion.tolerance,
+      passageTitle: normalizedQuestion.passageTitle,
+      passageText: normalizedQuestion.passageText,
+      assertionText: normalizedQuestion.assertionText,
+      reasonText: normalizedQuestion.reasonText
     };
   });
 
   const score = scoredAnswers.reduce((sum, answer) => sum + answer.pointsEarned, 0);
   const totalPoints = questions.reduce((sum, question) => sum + question.points, 0);
   const correctCount = scoredAnswers.filter((answer) => answer.isCorrect).length;
-  const skippedCount = scoredAnswers.filter(
-    (answer) =>
-      !answer.selectedAnswer &&
-      answer.selectedAnswers.length === 0
-  ).length;
+  const skippedCount = scoredAnswers.filter((answer) => answer.skipped).length;
   const wrongCount = scoredAnswers.length - correctCount - skippedCount;
   const totalQuestions = questions.length;
   const accuracy = totalQuestions ? Math.round((correctCount / totalQuestions) * 100) : 0;
@@ -89,29 +91,12 @@ export function scoreQuizAttempt(
 }
 
 export function scoreSingleQuestion(question: Question, answer: QuizAnswerState | undefined) {
-  const skipped = isSkippedAnswer(answer);
-  let isCorrect = false;
-
-  if (!skipped) {
-    if (question.type === "single-choice" || question.type === "true-false") {
-      isCorrect = answer?.selectedAnswer === question.correctAnswer;
-    }
-
-    if (question.type === "multiple-choice") {
-      isCorrect = sameSet(answer?.selectedAnswers ?? [], question.correctAnswers);
-    }
-
-    if (question.type === "text" && question.correctAnswer) {
-      isCorrect =
-        answer?.textAnswer.trim().toLowerCase() ===
-        question.correctAnswer.trim().toLowerCase();
-    }
-  }
+  const scored = scoreQuestionAnswer(question, answer);
 
   return {
-    skipped,
-    isCorrect,
-    pointsEarned: isCorrect ? question.points : 0,
-    pointsPossible: question.points
+    skipped: scored.skipped,
+    isCorrect: scored.isCorrect,
+    pointsEarned: scored.pointsEarned,
+    pointsPossible: scored.pointsPossible
   };
 }

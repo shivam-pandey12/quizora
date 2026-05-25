@@ -493,6 +493,8 @@ function singleQuestion({ quizId, fact, distractors, order, difficulty, promptMo
     options: [option(correctId, correctText), option("b", wrongTexts[0]), option("c", wrongTexts[1]), option("d", wrongTexts[2])],
     correctAnswer: correctId,
     correctAnswers: [],
+    correctOptionId: correctId,
+    correctOptionIds: [],
     explanation: fact.explanation,
     points,
     timeLimitSeconds: timeLimit(difficulty),
@@ -516,6 +518,8 @@ function multipleQuestion({ quizId, facts, order, difficulty }) {
     ],
     correctAnswer: "",
     correctAnswers: ["a", "b"],
+    correctOptionId: "",
+    correctOptionIds: ["a", "b"],
     explanation: `${facts[0].term} means ${facts[0].definition}, and ${facts[1].term} means ${facts[1].definition}.`,
     points,
     timeLimitSeconds: timeLimit(difficulty),
@@ -537,6 +541,122 @@ function trueFalseQuestion({ quizId, fact, order, difficulty, shouldBeTrue }) {
     options: [option("true", "True"), option("false", "False")],
     correctAnswer: shouldBeTrue ? "true" : "false",
     correctAnswers: [],
+    correctOptionId: shouldBeTrue ? "true" : "false",
+    correctOptionIds: [],
+    explanation: fact.explanation,
+    points,
+    timeLimitSeconds: timeLimit(difficulty),
+    order,
+    status: "active",
+    imageUrl: ""
+  };
+}
+
+function shortAnswerQuestion({ quizId, fact, order, difficulty }) {
+  const points = pointValue(difficulty);
+  return {
+    quizId,
+    type: "short-answer",
+    questionText: `Write the key term for this idea: ${fact.definition}`,
+    options: [],
+    correctAnswer: fact.term,
+    correctAnswers: [],
+    correctText: fact.term,
+    acceptableAnswers: [fact.term.toLowerCase()],
+    caseSensitive: false,
+    trimWhitespace: true,
+    explanation: fact.explanation,
+    points,
+    timeLimitSeconds: timeLimit(difficulty),
+    order,
+    status: "active",
+    imageUrl: ""
+  };
+}
+
+function fillBlankQuestion({ quizId, fact, order, difficulty }) {
+  const points = pointValue(difficulty);
+  return {
+    quizId,
+    type: "fill-blank",
+    questionText: `Fill in the blank: ${fact.definition.replace(/\.$/, "")} is called _____.`,
+    options: [],
+    correctAnswer: "",
+    correctAnswers: [],
+    blanks: [{ id: "blank-1", label: "Blank 1", acceptableAnswers: [fact.term], caseSensitive: false }],
+    blankScoring: "all-or-nothing",
+    explanation: fact.explanation,
+    points,
+    timeLimitSeconds: timeLimit(difficulty),
+    order,
+    status: "active",
+    imageUrl: ""
+  };
+}
+
+function matchingQuestion({ quizId, facts, order, difficulty }) {
+  const points = pointValue(difficulty);
+  return {
+    quizId,
+    type: "matching",
+    questionText: "Match each term with its correct idea.",
+    options: [],
+    correctAnswer: "",
+    correctAnswers: [],
+    matchPairs: facts.slice(0, 3).map((fact, index) => ({
+      id: `pair-${index + 1}`,
+      left: fact.term,
+      right: fact.definition
+    })),
+    shuffleRight: true,
+    explanation: "Each pair connects a key term to its defining idea.",
+    points,
+    timeLimitSeconds: timeLimit(difficulty),
+    order,
+    status: "active",
+    imageUrl: ""
+  };
+}
+
+function orderingQuestion({ quizId, facts, order, difficulty }) {
+  const points = pointValue(difficulty);
+  const items = facts.slice(0, 4).map((fact, index) => ({ id: `item-${index + 1}`, text: fact.term }));
+  return {
+    quizId,
+    type: "ordering",
+    questionText: "Arrange these terms in the same order they are introduced in this quiz.",
+    options: [],
+    correctAnswer: "",
+    correctAnswers: [],
+    orderItems: items,
+    correctOrderIds: items.map((item) => item.id),
+    explanation: "The correct order follows the learning sequence used in this starter quiz.",
+    points,
+    timeLimitSeconds: timeLimit(difficulty),
+    order,
+    status: "active",
+    imageUrl: ""
+  };
+}
+
+function assertionReasonQuestion({ quizId, fact, order, difficulty }) {
+  const points = pointValue(difficulty);
+  return {
+    quizId,
+    type: "assertion-reason",
+    questionText: "Choose the option that best evaluates the assertion and reason.",
+    assertionText: `${fact.term} is an important concept in this topic.`,
+    reasonText: fact.definition,
+    options: [
+      option("both-true-reason-explains", "Both are true, and the reason explains the assertion."),
+      option("both-true-not-explain", "Both are true, but the reason does not explain the assertion."),
+      option("assertion-true-reason-false", "The assertion is true, but the reason is false."),
+      option("assertion-false-reason-true", "The assertion is false, but the reason is true.")
+    ],
+    correctAnswer: "both-true-reason-explains",
+    correctAnswers: [],
+    correctOptionId: "both-true-reason-explains",
+    correctOptionIds: [],
     explanation: fact.explanation,
     points,
     timeLimitSeconds: timeLimit(difficulty),
@@ -552,16 +672,24 @@ function buildQuizQuestions(quizId, facts, difficulty, quizIndex) {
     falseDefinition: facts[(index + 1) % facts.length].definition
   }));
   const questions = [];
-  for (let index = 0; index < 4; index += 1) {
+  for (let index = 0; index < 3; index += 1) {
     const distractors = [withFalseDefinitions[(index + 1) % 5], withFalseDefinitions[(index + 2) % 5], withFalseDefinitions[(index + 3) % 5]];
     questions.push(singleQuestion({ quizId, fact: withFalseDefinitions[index], distractors, order: questions.length + 1, difficulty, promptMode: "definition" }));
   }
-  for (let index = 0; index < 4; index += 1) {
+  for (let index = 0; index < 3; index += 1) {
     const distractors = [withFalseDefinitions[(index + 1) % 5], withFalseDefinitions[(index + 2) % 5], withFalseDefinitions[(index + 3) % 5]];
     questions.push(singleQuestion({ quizId, fact: withFalseDefinitions[index], distractors, order: questions.length + 1, difficulty, promptMode: "term" }));
   }
-  questions.push(multipleQuestion({ quizId, facts: withFalseDefinitions, order: 9, difficulty }));
-  questions.push(trueFalseQuestion({ quizId, fact: withFalseDefinitions[4], order: 10, difficulty, shouldBeTrue: quizIndex % 2 === 0 }));
+  questions.push(multipleQuestion({ quizId, facts: withFalseDefinitions, order: questions.length + 1, difficulty }));
+  questions.push(trueFalseQuestion({ quizId, fact: withFalseDefinitions[4], order: questions.length + 1, difficulty, shouldBeTrue: quizIndex % 2 === 0 }));
+  questions.push((quizIndex + difficulty.length) % 2 === 0
+    ? shortAnswerQuestion({ quizId, fact: withFalseDefinitions[2], order: questions.length + 1, difficulty })
+    : fillBlankQuestion({ quizId, fact: withFalseDefinitions[2], order: questions.length + 1, difficulty }));
+  questions.push(quizIndex % 3 === 0
+    ? matchingQuestion({ quizId, facts: withFalseDefinitions, order: questions.length + 1, difficulty })
+    : quizIndex % 3 === 1
+      ? orderingQuestion({ quizId, facts: withFalseDefinitions, order: questions.length + 1, difficulty })
+      : assertionReasonQuestion({ quizId, fact: withFalseDefinitions[3], order: questions.length + 1, difficulty }));
   return questions;
 }
 

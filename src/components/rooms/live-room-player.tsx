@@ -13,13 +13,13 @@ import {
   Trophy
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
-import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ImageDisplay } from "@/components/ui/image-display";
 import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { UserAvatar } from "@/components/ui/user-avatar";
@@ -429,13 +429,12 @@ export function LiveRoomPlayer({ roomCode }: { roomCode: string }) {
                 {currentQuestion.questionText}
               </h2>
               {currentQuestion.imageUrl ? (
-                <Image
-                  alt=""
-                  className="mt-5 max-h-72 w-full rounded-3xl object-cover"
-                  height={360}
-                  unoptimized
+                <ImageDisplay
+                  alt={currentQuestion.imageAlt || currentQuestion.questionText}
+                  caption={currentQuestion.imageCaption}
+                  className="mt-5"
+                  imageClassName="max-h-72"
                   src={currentQuestion.imageUrl}
-                  width={960}
                 />
               ) : null}
               <div className="mt-6 grid gap-3">
@@ -465,7 +464,18 @@ export function LiveRoomPlayer({ roomCode }: { roomCode: string }) {
                         onClick={() => toggleOption(option.id)}
                         type="button"
                       >
-                        <span>{option.text}</span>
+                        <span className="min-w-0 flex-1">
+                          {option.imageUrl ? (
+                            <ImageDisplay
+                              alt={option.imageAlt || option.text}
+                              className="mb-3 rounded-2xl"
+                              compact
+                              imageClassName="max-h-40"
+                              src={option.imageUrl}
+                            />
+                          ) : null}
+                          <span>{option.text || option.imageAlt || option.id}</span>
+                        </span>
                         {selected ? <Check className="size-5" /> : null}
                       </button>
                     );

@@ -6,7 +6,7 @@
 npm run seed:content:dry
 ```
 
-Validates starter content counts, slugs, quiz/question links, options, correct answers, explanations, timers, and point totals. It does not require Firebase Admin credentials and does not write Firestore.
+Validates starter content counts, slugs, quiz/question links, option IDs, accepted text answers, fill-blank answers, matching pairs, ordering items, explanations, timers, and point totals. It does not require Firebase Admin credentials and does not write Firestore.
 
 ## Safe Import
 

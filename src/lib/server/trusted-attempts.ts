@@ -16,6 +16,14 @@ import {
 import { calculateStreakUpdate, evaluateBadgesForAttempt, normalizeBadges } from "@/lib/quiz/gamification";
 import { getPeriodKey } from "@/lib/quiz/periods";
 import { scoreQuizAttempt, scoreSingleQuestion } from "@/lib/quiz/scoring";
+import {
+  getSafeQuestionPayload,
+  normalizeBlanks,
+  normalizeMatchPairs,
+  normalizeOptions,
+  normalizeOrderItems,
+  normalizeQuestionType
+} from "@/lib/quiz/question-engine";
 import { calculateXPForAttempt } from "@/lib/quiz/xp";
 import { isPublicApprovedQuiz } from "@/lib/quiz/public-visibility";
 import type {
@@ -124,6 +132,10 @@ function mapQuizFromData(id: string, data: RawData): Quiz {
     status,
     visibility: data.visibility === "private" ? "private" : "public",
     thumbnailUrl: asString(data.thumbnailUrl),
+    coverImageUrl: asString(data.coverImageUrl),
+    coverImagePath: asString(data.coverImagePath),
+    coverImageAlt: asString(data.coverImageAlt),
+    coverImageCaption: asString(data.coverImageCaption),
     tags: asStringArray(data.tags),
     estimatedMinutes: asNumber(data.estimatedMinutes, 5),
     questionCount: asNumber(data.questionCount),
@@ -160,27 +172,44 @@ function mapQuizFromData(id: string, data: RawData): Quiz {
 }
 
 function mapQuestionFromData(id: string, data: RawData): Question {
+  const type = normalizeQuestionType(data.type);
   return {
     id,
     quizId: asString(data.quizId),
-    type:
-      data.type === "multiple-choice" || data.type === "true-false" || data.type === "text"
-        ? data.type
-        : "single-choice",
+    type,
     questionText: asString(data.questionText),
-    options: Array.isArray(data.options)
-      ? data.options
-          .map((option) => ({
-            id: asString((option as RawData)?.id),
-            text: asString((option as RawData)?.text),
-            imageUrl: asString((option as RawData)?.imageUrl)
-          }))
-          .filter((option) => option.id && option.text)
-      : [],
+    options: normalizeOptions(data.options, 0),
     correctAnswer: asString(data.correctAnswer),
     correctAnswers: asStringArray(data.correctAnswers),
+    correctOptionId: asString(data.correctOptionId, asString(data.correctAnswer)),
+    correctOptionIds: asStringArray(data.correctOptionIds).length
+      ? asStringArray(data.correctOptionIds)
+      : asStringArray(data.correctAnswers),
+    correctText: asString(data.correctText, type === "short-answer" || type === "text" ? asString(data.correctAnswer) : ""),
+    acceptableAnswers: asStringArray(data.acceptableAnswers),
+    caseSensitive: asBoolean(data.caseSensitive),
+    trimWhitespace: asBoolean(data.trimWhitespace, true),
+    correctNumber: typeof data.correctNumber === "number" ? data.correctNumber : null,
+    tolerance: typeof data.tolerance === "number" ? data.tolerance : 0,
+    unit: asString(data.unit),
+    allowEquivalentUnits: asBoolean(data.allowEquivalentUnits),
+    blanks: normalizeBlanks(data.blanks),
+    blankScoring: "all-or-nothing",
+    matchPairs: normalizeMatchPairs(data.matchPairs),
+    shuffleRight: asBoolean(data.shuffleRight, true),
+    orderItems: normalizeOrderItems(data.orderItems),
+    correctOrderIds: asStringArray(data.correctOrderIds),
+    assertionText: asString(data.assertionText),
+    reasonText: asString(data.reasonText),
+    passageTitle: asString(data.passageTitle),
+    passageText: asString(data.passageText),
+    passageImageUrl: asString(data.passageImageUrl),
+    passageImageAlt: asString(data.passageImageAlt),
     explanation: asString(data.explanation),
     imageUrl: asString(data.imageUrl),
+    imagePath: asString(data.imagePath),
+    imageAlt: asString(data.imageAlt),
+    imageCaption: asString(data.imageCaption),
     points: asNumber(data.points, 10),
     timeLimitSeconds: asNumber(data.timeLimitSeconds),
     order: asNumber(data.order),
@@ -191,17 +220,7 @@ function mapQuestionFromData(id: string, data: RawData): Question {
 }
 
 function safeQuestion(question: Question): PlayQuestion {
-  return {
-    id: question.id,
-    quizId: question.quizId,
-    type: question.type,
-    questionText: question.questionText,
-    options: question.options,
-    imageUrl: question.imageUrl,
-    points: question.points,
-    timeLimitSeconds: question.timeLimitSeconds,
-    order: question.order
-  };
+  return getSafeQuestionPayload(question);
 }
 
 function profileName(decoded: DecodedIdToken, userData: RawData) {
@@ -410,6 +429,7 @@ export async function startTrustedAttempt({
     quiz.timeLimitSeconds || questions.reduce((sum, question) => sum + (question.timeLimitSeconds || 0), 0);
   const expiresAtMs = now.getTime() + Math.max(300, timeLimitSeconds || questions.length * 45) * 1000 + 60_000;
   const nonce = randomNonce();
+  const safeQuestions = questions.map(safeQuestion);
   const sessionToken = signAttemptSession({
     sessionId: sessionRef.id,
     userId: decoded.uid,
@@ -436,6 +456,7 @@ export async function startTrustedAttempt({
     attemptId: null,
     questionIds: questions.map((question) => question.id),
     questionOrder: questions.map((question) => question.id),
+    safeQuestions,
     questionCount: questions.length,
     totalPoints: questions.reduce((sum, question) => sum + question.points, 0),
     timeLimitSeconds,
@@ -461,7 +482,7 @@ export async function startTrustedAttempt({
       timeLimitSeconds,
       totalPoints: questions.reduce((sum, question) => sum + question.points, 0)
     },
-    questions: questions.map(safeQuestion),
+    questions: safeQuestions,
     assignment: assignment
       ? {
           assignmentId: assignment.assignmentId,

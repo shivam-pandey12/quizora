@@ -92,6 +92,7 @@ firebase login
 firebase use quizora-5725f
 firebase deploy --only firestore:rules
 firebase deploy --only firestore:indexes
+firebase deploy --only storage
 ```
 
 Then configure Firebase App Hosting for the GitHub repo and set production environment values/secrets from `docs/env-production.md`.

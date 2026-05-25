@@ -15,6 +15,12 @@ import {
   safeFlashQuestion,
   scoreFlashAnswer
 } from "@/lib/flash/shared";
+import {
+  flashQuestionTypes,
+  normalizeOptions,
+  normalizeQuestionType,
+  validateQuestionByType
+} from "@/lib/quiz/question-engine";
 import type { FlashLimits, FlashQuestion, QuizAnswerState, QuestionOption, UserProfile } from "@/types/domain";
 
 type Data = Record<string, unknown>;
@@ -25,6 +31,8 @@ interface FlashQuestionDraft {
   options?: unknown;
   correctAnswer?: unknown;
   correctAnswers?: unknown;
+  correctText?: unknown;
+  acceptableAnswers?: unknown;
   explanation?: unknown;
   points?: unknown;
   timeLimitSeconds?: unknown;
@@ -139,42 +147,75 @@ async function uniqueFlashCode() {
 
 function validateQuestion(input: FlashQuestionDraft, order: number, flashQuizId: string): Omit<FlashQuestion, "id" | "createdAt" | "updatedAt"> {
   const questionText = asString(input.questionText).trim();
-  const type =
-    input.type === "multiple-choice" || input.type === "true-false"
-      ? input.type
-      : "single-choice";
+  const requestedType = normalizeQuestionType(input.type);
+  const type = flashQuestionTypes.includes(requestedType) ? requestedType : "single-choice";
   const options =
     type === "true-false"
       ? [
           { id: "true", text: "True" },
           { id: "false", text: "False" }
         ]
+      : type === "short-answer" || type === "text"
+        ? []
       : optionList(input.options);
   const correctAnswer = asString(input.correctAnswer).trim();
   const correctAnswers = asStringArray(input.correctAnswers).map((item) => item.trim()).filter(Boolean);
+  const correctText = asString(input.correctText, correctAnswer).trim();
+  const acceptableAnswers = asStringArray(input.acceptableAnswers).map((item) => item.trim()).filter(Boolean);
   const explanation = asString(input.explanation).trim();
   const points = Math.max(1, Math.min(20, Math.round(asNumber(input.points, 1))));
   const timeLimitSeconds = Math.max(10, Math.min(180, Math.round(asNumber(input.timeLimitSeconds, 30))));
   const optionIds = new Set(options.map((option) => option.id));
 
   if (!questionText || questionText.length < 8) throw new Error(`Question ${order + 1} needs clearer text.`);
-  if (options.length < 2) throw new Error(`Question ${order + 1} needs at least two options.`);
+  if (type !== "short-answer" && type !== "text" && options.length < 2) throw new Error(`Question ${order + 1} needs at least two options.`);
   if (!explanation || explanation.length < 8) throw new Error(`Question ${order + 1} needs a short explanation.`);
   if (type === "multiple-choice") {
     if (!correctAnswers.length || !correctAnswers.every((answer) => optionIds.has(answer))) {
       throw new Error(`Question ${order + 1} has invalid correct answers.`);
     }
+  } else if (type === "short-answer" || type === "text") {
+    if (!correctText && !acceptableAnswers.length) throw new Error(`Question ${order + 1} needs an accepted short answer.`);
   } else if (!correctAnswer || !optionIds.has(correctAnswer)) {
     throw new Error(`Question ${order + 1} has an invalid correct answer.`);
   }
+  const validation = validateQuestionByType(
+    {
+      id: "",
+      quizId: flashQuizId,
+      flashQuizId,
+      questionText,
+      type,
+      options,
+      correctAnswer: type === "multiple-choice" ? "" : correctAnswer || correctText,
+      correctAnswers: type === "multiple-choice" ? correctAnswers : correctAnswer ? [correctAnswer] : [],
+      correctText,
+      acceptableAnswers,
+      explanation,
+      points,
+      timeLimitSeconds,
+      order,
+      status: "active",
+      createdAt: null,
+      updatedAt: null
+    },
+    { maxOptions: 8 }
+  );
+  if (!validation.valid) throw new Error(`Question ${order + 1}: ${Object.values(validation.errors)[0]}`);
 
   return {
     flashQuizId,
     questionText,
     type,
     options,
-    correctAnswer: type === "multiple-choice" ? "" : correctAnswer,
+    correctAnswer: type === "multiple-choice" ? "" : type === "short-answer" || type === "text" ? correctText : correctAnswer,
     correctAnswers: type === "multiple-choice" ? correctAnswers : correctAnswer ? [correctAnswer] : [],
+    correctOptionId: type === "multiple-choice" || type === "short-answer" || type === "text" ? "" : correctAnswer,
+    correctOptionIds: type === "multiple-choice" ? correctAnswers : [],
+    correctText,
+    acceptableAnswers,
+    caseSensitive: false,
+    trimWhitespace: true,
     explanation,
     points,
     timeLimitSeconds,
@@ -274,13 +315,18 @@ export async function getFullFlashQuestions(flashQuizId: string) {
       id: docSnapshot.id,
       flashQuizId: asString(data.flashQuizId),
       questionText: asString(data.questionText),
-      type:
-        data.type === "multiple-choice" || data.type === "true-false" || data.type === "text"
-          ? data.type
-          : "single-choice",
-      options: optionList(data.options),
+      type: flashQuestionTypes.includes(normalizeQuestionType(data.type)) ? normalizeQuestionType(data.type) : "single-choice",
+      options: normalizeOptions(data.options, 0),
       correctAnswer: asString(data.correctAnswer),
       correctAnswers: asStringArray(data.correctAnswers),
+      correctOptionId: asString(data.correctOptionId, asString(data.correctAnswer)),
+      correctOptionIds: asStringArray(data.correctOptionIds).length
+        ? asStringArray(data.correctOptionIds)
+        : asStringArray(data.correctAnswers),
+      correctText: asString(data.correctText, asString(data.correctAnswer)),
+      acceptableAnswers: asStringArray(data.acceptableAnswers),
+      caseSensitive: asBoolean(data.caseSensitive),
+      trimWhitespace: asBoolean(data.trimWhitespace, true),
       explanation: asString(data.explanation),
       points: asNumber(data.points, 1),
       timeLimitSeconds: asNumber(data.timeLimitSeconds, 30),
@@ -654,8 +700,9 @@ function answerPayload({
     userId,
     questionId: question.id,
     questionIndex,
-    selectedAnswer: skipped ? "" : question.type === "text" ? answer.textAnswer.trim() : answer.selectedAnswer,
+    selectedAnswer: skipped ? "" : question.type === "text" || question.type === "short-answer" ? "" : answer.selectedAnswer,
     selectedAnswers: skipped ? [] : answer.selectedAnswers,
+    textAnswer: skipped ? "" : answer.textAnswer.trim(),
     isCorrect: scored.isCorrect,
     pointsEarned: scored.pointsEarned + speedBonus,
     pointsPossible: question.points,
@@ -716,7 +763,7 @@ export async function submitFlashAnswerServer({
     const player = playerSnapshot.data() ?? {};
     if (!activePlayer(player)) throw new Error("You are not active in this Flash Quiz.");
     const nextCorrect = asNumber(player.correctCount) + (payload.isCorrect ? 1 : 0);
-    const answeredSomething = Boolean(payload.selectedAnswer || payload.selectedAnswers.length);
+    const answeredSomething = Boolean(payload.selectedAnswer || payload.selectedAnswers.length || payload.textAnswer);
     const nextWrong = asNumber(player.wrongCount) + (!payload.isCorrect && answeredSomething ? 1 : 0);
     const nextSkipped = asNumber(player.skippedCount);
     const nextScore = asNumber(player.score) + payload.pointsEarned;
@@ -946,6 +993,12 @@ export async function convertFlashQuizToDraftServer(decoded: DecodedIdToken, fla
       options: question.options,
       correctAnswer: question.correctAnswer,
       correctAnswers: question.correctAnswers,
+      correctOptionId: question.correctOptionId || question.correctAnswer,
+      correctOptionIds: question.correctOptionIds || question.correctAnswers,
+      correctText: question.correctText || question.correctAnswer,
+      acceptableAnswers: question.acceptableAnswers || [],
+      caseSensitive: question.caseSensitive || false,
+      trimWhitespace: question.trimWhitespace !== false,
       explanation: question.explanation,
       imageUrl: "",
       points: question.points,

@@ -73,16 +73,17 @@ import type {
   FlashQuiz,
   FlashResult,
   PlayQuestion,
-  QuestionType,
   QuizAnswerState
 } from "@/types/domain";
 
 type DraftQuestion = {
   questionText: string;
-  type: Exclude<QuestionType, "text">;
+  type: "single-choice" | "multiple-choice" | "true-false" | "short-answer";
   options: { id: string; text: string }[];
   correctAnswer: string;
   correctAnswers: string[];
+  correctText: string;
+  acceptableAnswers: string[];
   explanation: string;
   points: number;
   timeLimitSeconds: number;
@@ -99,6 +100,8 @@ const emptyQuestion = (index: number): DraftQuestion => ({
   ],
   correctAnswer: "a",
   correctAnswers: [],
+  correctText: "",
+  acceptableAnswers: [],
   explanation: "",
   points: 1,
   timeLimitSeconds: 30 + index * 0
@@ -505,11 +508,17 @@ export function FlashCreatePage() {
                       <option value="single-choice">Single choice</option>
                       <option value="multiple-choice">Multiple choice</option>
                       <option value="true-false">True/false</option>
+                      <option value="short-answer">Short answer</option>
                     </Select>
                     <Input min={1} max={20} type="number" value={question.points} onChange={(event) => updateQuestion(index, { points: Number(event.target.value) })} />
                     <Input min={10} max={180} type="number" value={question.timeLimitSeconds} onChange={(event) => updateQuestion(index, { timeLimitSeconds: Number(event.target.value) })} />
                   </div>
-                  {question.type === "true-false" ? (
+                  {question.type === "short-answer" ? (
+                    <div className="grid gap-3">
+                      <Input value={question.correctText} onChange={(event) => updateQuestion(index, { correctText: event.target.value, correctAnswer: event.target.value })} placeholder="Accepted short answer" />
+                      <p className="text-xs text-muted-foreground">Advanced Flash types such as matching, ordering, numeric, and fill-blank are available in permanent quizzes first.</p>
+                    </div>
+                  ) : question.type === "true-false" ? (
                     <Select value={question.correctAnswer} onChange={(event) => updateQuestion(index, { correctAnswer: event.target.value })}>
                       <option value="true">True</option>
                       <option value="false">False</option>
@@ -652,6 +661,7 @@ export function FlashPlayPage({ flashCode }: { flashCode: string }) {
   const [localIndex, setLocalIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState("");
   const [selectedAnswers, setSelectedAnswers] = useState<string[]>([]);
+  const [textAnswer, setTextAnswer] = useState("");
   const [submitted, setSubmitted] = useState<Set<number>>(new Set());
   const [error, setError] = useState("");
   const [startedAt, setStartedAt] = useState(Date.now());
@@ -700,12 +710,16 @@ export function FlashPlayPage({ flashCode }: { flashCode: string }) {
     const answer: QuizAnswerState = {
       selectedAnswer,
       selectedAnswers,
-      textAnswer: "",
+      textAnswer,
       timeSpentSeconds: Math.max(0, Math.round((Date.now() - startedAt) / 1000))
     };
     try {
       const result = await submitFlashAnswerClient({ user, flashQuizId: flashQuiz.id, questionIndex: currentIndex, answer });
       setSubmitted((current) => new Set([...current, currentIndex]));
+      setSelectedAnswer("");
+      setSelectedAnswers([]);
+      setTextAnswer("");
+      setStartedAt(Date.now());
       if (result.completed && result.resultPath) {
         router.push(result.resultPath);
         return;
@@ -740,7 +754,9 @@ export function FlashPlayPage({ flashCode }: { flashCode: string }) {
         </div>
         <h1 className="mt-6 text-3xl font-semibold">{question.questionText}</h1>
         <div className="mt-6 grid gap-3">
-          {question.options.map((option) => {
+          {question.type === "short-answer" || question.type === "text" ? (
+            <Textarea disabled={alreadySubmitted} value={textAnswer} onChange={(event) => setTextAnswer(event.target.value)} placeholder="Type a concise answer" />
+          ) : question.options.map((option) => {
             const active = question.type === "multiple-choice" ? selectedAnswers.includes(option.id) : selectedAnswer === option.id;
             return (
               <button
@@ -762,7 +778,7 @@ export function FlashPlayPage({ flashCode }: { flashCode: string }) {
           })}
         </div>
         <div className="mt-6 flex flex-wrap gap-3">
-          <Button disabled={alreadySubmitted || (!selectedAnswer && !selectedAnswers.length)} icon={<CheckCircle2 className="size-4" />} onClick={() => void submit()}>
+          <Button disabled={alreadySubmitted || (!selectedAnswer && !selectedAnswers.length && !textAnswer.trim())} icon={<CheckCircle2 className="size-4" />} onClick={() => void submit()}>
             {alreadySubmitted ? "Submitted" : "Submit answer"}
           </Button>
           {flashQuiz.mode === "self-paced" && currentIndex > 0 ? <Button onClick={() => setLocalIndex((index) => Math.max(0, index - 1))} variant="secondary">Back</Button> : null}

@@ -44,6 +44,7 @@ git push -u origin main
 - Keep Razorpay, Firebase Admin, and attempt-session secrets server-only.
 - Confirm live/test Razorpay keys are not mixed.
 - Confirm Firebase Admin credentials work for billing and trusted scoring route handlers.
+- Confirm `FIREBASE_STORAGE_BUCKET` is set before enabling image uploads.
 
 ## Firebase
 
@@ -54,6 +55,7 @@ firebase login
 firebase use quizora-5725f
 firebase deploy --only firestore:rules
 firebase deploy --only firestore:indexes
+firebase deploy --only storage
 ```
 
 Before go-live, verify the actual Firestore database and edition:

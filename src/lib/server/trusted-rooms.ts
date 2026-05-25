@@ -6,7 +6,7 @@ import { getAdminDb } from "@/lib/firebase/admin";
 import { hasAdminAccess } from "@/lib/auth/admin-access";
 import { getFullRoomQuestions, scoreTrustedRoomAnswer, updateTrustedLeaderboardsForAttempt } from "@/lib/server/trusted-attempts";
 import { calculateStreakUpdate, evaluateBadgesForAttempt, normalizeBadges } from "@/lib/quiz/gamification";
-import { scoreSingleQuestion } from "@/lib/quiz/scoring";
+import { isSkippedAnswer, scoreQuestionAnswer } from "@/lib/quiz/question-engine";
 import { calculateXPForAttempt } from "@/lib/quiz/xp";
 import type { Attempt, PersonalBestStatus, Question, QuizAnswerState, SecurityFlag, UserProfile } from "@/types/domain";
 
@@ -110,7 +110,9 @@ function generateBotAnswer(room: Data & { id: string }, question: Question, bot:
     stableNumber(`${room.id}:${asNumber(room.currentQuestionIndex)}:${question.id}:${asString(bot.userId)}:correct`) <=
     botAccuracy(bot.botDifficulty);
   if (question.type === "multiple-choice") {
-    const correctAnswers = question.correctAnswers.length
+    const correctAnswers = question.correctOptionIds?.length
+      ? question.correctOptionIds
+      : question.correctAnswers.length
       ? question.correctAnswers
       : question.correctAnswer
         ? [question.correctAnswer]
@@ -122,10 +124,22 @@ function generateBotAnswer(room: Data & { id: string }, question: Question, bot:
       timeSpentSeconds: 0
     };
   }
-  if (question.type === "text") {
-    return { selectedAnswer: "", selectedAnswers: [], textAnswer: shouldBeCorrect ? question.correctAnswer : "", timeSpentSeconds: 0 };
+  if (question.type === "text" || question.type === "short-answer") {
+    return { selectedAnswer: "", selectedAnswers: [], textAnswer: shouldBeCorrect ? question.correctText || question.correctAnswer : "", timeSpentSeconds: 0 };
   }
-  const correct = question.correctAnswer || question.correctAnswers[0] || "";
+  if (question.type === "numeric") {
+    return { selectedAnswer: "", selectedAnswers: [], textAnswer: "", numericAnswer: shouldBeCorrect ? String(question.correctNumber ?? "") : "", timeSpentSeconds: 0 };
+  }
+  if (question.type === "ordering") {
+    return { selectedAnswer: "", selectedAnswers: [], textAnswer: "", orderingAnswerIds: shouldBeCorrect ? question.correctOrderIds ?? [] : [], timeSpentSeconds: 0 };
+  }
+  if (question.type === "matching") {
+    const matchingAnswers = shouldBeCorrect
+      ? Object.fromEntries((question.matchPairs ?? []).map((pair) => [pair.id, pair.id]))
+      : {};
+    return { selectedAnswer: "", selectedAnswers: [], textAnswer: "", matchingAnswers, timeSpentSeconds: 0 };
+  }
+  const correct = question.correctOptionId || question.correctAnswer || question.correctAnswers[0] || "";
   const fallbackWrong = question.type === "true-false" ? (correct === "true" ? "false" : "true") : wrongOption(question, [correct]);
   return { selectedAnswer: shouldBeCorrect ? correct : fallbackWrong, selectedAnswers: [], textAnswer: "", timeSpentSeconds: 0 };
 }
@@ -155,6 +169,7 @@ function roomAnswerPayload({
   timeTakenSeconds: number;
   skipped?: boolean;
 }) {
+  const scored = scoreQuestionAnswer(question, skipped ? undefined : answer);
   return {
     roomId: room.id,
     roomCode: asString(room.roomCode),
@@ -164,16 +179,39 @@ function roomAnswerPayload({
     questionIndex,
     questionTextSnapshot: question.questionText,
     type: question.type,
-    selectedAnswer: skipped ? "" : question.type === "text" ? answer.textAnswer.trim() : answer.selectedAnswer,
-    selectedAnswers: skipped ? [] : answer.selectedAnswers,
-    correctAnswer: "",
-    correctAnswers: [],
+    selectedAnswer: skipped ? "" : scored.selectedAnswer,
+    selectedAnswers: skipped ? [] : scored.selectedAnswers,
+    correctAnswer: scored.correctAnswer,
+    correctAnswers: scored.correctAnswers,
+    selectedAnswerSummary: scored.selectedAnswerSummary,
+    correctAnswerSummary: scored.correctAnswerSummary,
+    textAnswer: skipped ? "" : scored.textAnswer,
+    numericAnswer: skipped ? "" : scored.numericAnswer,
+    blankAnswers: skipped ? {} : scored.blankAnswers,
+    correctBlankAnswers: scored.correctBlankAnswers,
+    matchingAnswers: skipped ? {} : scored.matchingAnswers,
+    correctMatchingAnswers: scored.correctMatchingAnswers,
+    orderingAnswerIds: skipped ? [] : scored.orderingAnswerIds,
+    correctOrderIds: scored.correctOrderIds,
+    skipped,
     isCorrect,
     pointsEarned,
     pointsPossible,
     timeTakenSeconds,
     explanationSnapshot: "",
+    questionImageUrl: question.imageUrl,
+    questionImageAlt: question.imageAlt,
+    questionImageCaption: question.imageCaption,
     optionsSnapshot: question.options,
+    blanksSnapshot: question.blanks,
+    matchPairsSnapshot: question.matchPairs,
+    orderItemsSnapshot: question.orderItems,
+    unit: question.unit,
+    tolerance: question.tolerance,
+    passageTitle: question.passageTitle,
+    passageText: question.passageText,
+    assertionText: question.assertionText,
+    reasonText: question.reasonText,
     trusted: true,
     scoringSource: "server",
     securityFlags: [] as SecurityFlag[],
@@ -257,7 +295,7 @@ export async function submitTrustedRoomAnswer({
       correctCount: asNumber(freshPlayer.correctCount) + (scored.isCorrect ? 1 : 0),
       wrongCount:
         asNumber(freshPlayer.wrongCount) +
-        (!scored.isCorrect && (finalAnswer.selectedAnswer || finalAnswer.selectedAnswers.length || finalAnswer.textAnswer) ? 1 : 0),
+        (!scored.isCorrect && !isSkippedAnswer(finalAnswer, question) ? 1 : 0),
       lastSeenAt: FieldValue.serverTimestamp()
     });
   });
@@ -432,24 +470,51 @@ export async function ensureTrustedRoomAttempt({ decoded, roomId }: { decoded: D
     const answerState: QuizAnswerState = {
       selectedAnswer: asString(answer.selectedAnswer),
       selectedAnswers: asStringArray(answer.selectedAnswers),
-      textAnswer: question.type === "text" ? asString(answer.selectedAnswer) : "",
+      textAnswer: asString(answer.textAnswer, question.type === "text" ? asString(answer.selectedAnswer) : ""),
+      numericAnswer: asString(answer.numericAnswer),
+      blankAnswers: asData(answer.blankAnswers) as Record<string, string>,
+      matchingAnswers: asData(answer.matchingAnswers) as Record<string, string>,
+      orderingAnswerIds: asStringArray(answer.orderingAnswerIds),
       timeSpentSeconds: asNumber(answer.timeTakenSeconds)
     };
-    const scored = scoreSingleQuestion(question, answerState);
+    const scored = scoreQuestionAnswer(question, answerState);
     return {
       questionId: question.id,
       questionTextSnapshot: question.questionText,
       type: question.type,
-      selectedAnswer: question.type === "text" ? answerState.textAnswer : answerState.selectedAnswer,
-      selectedAnswers: answerState.selectedAnswers,
-      correctAnswer: question.correctAnswer,
-      correctAnswers: question.correctAnswers,
+      selectedAnswer: scored.selectedAnswer,
+      selectedAnswers: scored.selectedAnswers,
+      correctAnswer: scored.correctAnswer,
+      correctAnswers: scored.correctAnswers,
+      selectedAnswerSummary: scored.selectedAnswerSummary,
+      correctAnswerSummary: scored.correctAnswerSummary,
+      textAnswer: scored.textAnswer,
+      numericAnswer: scored.numericAnswer,
+      blankAnswers: scored.blankAnswers,
+      correctBlankAnswers: scored.correctBlankAnswers,
+      matchingAnswers: scored.matchingAnswers,
+      correctMatchingAnswers: scored.correctMatchingAnswers,
+      orderingAnswerIds: scored.orderingAnswerIds,
+      correctOrderIds: scored.correctOrderIds,
+      skipped: scored.skipped,
       isCorrect: scored.isCorrect,
       pointsEarned: scored.pointsEarned,
       pointsPossible: question.points,
       timeSpentSeconds: answerState.timeSpentSeconds,
       explanationSnapshot: question.explanation,
-      optionsSnapshot: question.options
+      questionImageUrl: question.imageUrl,
+      questionImageAlt: question.imageAlt,
+      questionImageCaption: question.imageCaption,
+      optionsSnapshot: question.options,
+      blanksSnapshot: question.blanks,
+      matchPairsSnapshot: question.matchPairs,
+      orderItemsSnapshot: question.orderItems,
+      unit: question.unit,
+      tolerance: question.tolerance,
+      passageTitle: question.passageTitle,
+      passageText: question.passageText,
+      assertionText: question.assertionText,
+      reasonText: question.reasonText
     };
   });
   const completedAt = toDate(result.completedAt) ?? new Date();

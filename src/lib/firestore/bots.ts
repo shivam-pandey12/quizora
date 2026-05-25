@@ -255,6 +255,9 @@ export async function submitBotAnswer({
       pointsPossible: question.points,
       timeTakenSeconds,
       explanationSnapshot: question.explanation,
+      questionImageUrl: question.imageUrl,
+      questionImageAlt: question.imageAlt,
+      questionImageCaption: question.imageCaption,
       optionsSnapshot: question.options,
       answeredAt: serverTimestamp()
     });

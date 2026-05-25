@@ -26,6 +26,7 @@ Use one Firebase Admin credential style:
 FIREBASE_SERVICE_ACCOUNT_JSON=
 FIREBASE_SERVICE_ACCOUNT_BASE64=
 FIREBASE_PROJECT_ID=
+FIREBASE_STORAGE_BUCKET=
 FIREBASE_CLIENT_EMAIL=
 FIREBASE_PRIVATE_KEY=
 ```
@@ -51,5 +52,6 @@ COMPETITIVE_MODE_ENABLED=true
 - Test keys must not be mixed with live Razorpay keys.
 - `ATTEMPT_SESSION_SECRET` should be a random 32+ character string.
 - Service account JSON/private keys must never be committed or printed in logs.
+- `FIREBASE_STORAGE_BUCKET` should match `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` when API-route image uploads are enabled.
 - If a Firebase service-account private key was ever placed in a shared or committed file, revoke that key in Google Cloud IAM and create a new one before launch.
 - Run `npm run launch:audit`; warnings about missing local production env are acceptable on developer machines.

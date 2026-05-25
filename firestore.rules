@@ -1133,12 +1133,7 @@ service cloud.firestore {
 
     match /questions/{questionId} {
       allow get, list: if isAdmin()
-        || creatorQuestionManageAllowed(resource.data)
-        || (
-          signedIn()
-          && resource.data.status == 'active'
-          && isPublishedPublicQuiz(resource.data.quizId)
-        );
+        || creatorQuestionManageAllowed(resource.data);
       allow create: if isAdmin() || creatorQuestionManageAllowed(request.resource.data);
       allow update: if isAdmin()
         || (

@@ -30,6 +30,7 @@ import {
 } from "@/lib/firestore/attempts";
 import { calculateXPForAttempt } from "@/lib/quiz/xp";
 import { scoreSingleQuestion } from "@/lib/quiz/scoring";
+import { isSkippedAnswer, scoreQuestionAnswer } from "@/lib/quiz/question-engine";
 import type {
   Question,
   QuizAnswerState,
@@ -817,6 +818,7 @@ function answerPayload({
   const scored = skipped
     ? { skipped: true, isCorrect: false, pointsEarned: 0, pointsPossible: question.points }
     : scoreSingleQuestion(question, answer);
+  const scoredAnswer = scoreQuestionAnswer(question, skipped ? undefined : answer);
   const speedBonus =
     room.settings.scoringMode === "speed-bonus" && scored.isCorrect
       ? Math.max(
@@ -837,16 +839,39 @@ function answerPayload({
     questionIndex,
     questionTextSnapshot: question.questionText,
     type: question.type,
-    selectedAnswer: question.type === "text" ? answer.textAnswer.trim() : answer.selectedAnswer,
-    selectedAnswers: answer.selectedAnswers,
-    correctAnswer: question.correctAnswer,
-    correctAnswers: question.correctAnswers,
+    selectedAnswer: skipped ? "" : scoredAnswer.selectedAnswer,
+    selectedAnswers: skipped ? [] : scoredAnswer.selectedAnswers,
+    correctAnswer: scoredAnswer.correctAnswer,
+    correctAnswers: scoredAnswer.correctAnswers,
+    selectedAnswerSummary: scoredAnswer.selectedAnswerSummary,
+    correctAnswerSummary: scoredAnswer.correctAnswerSummary,
+    textAnswer: skipped ? "" : scoredAnswer.textAnswer,
+    numericAnswer: skipped ? "" : scoredAnswer.numericAnswer,
+    blankAnswers: skipped ? {} : scoredAnswer.blankAnswers,
+    correctBlankAnswers: scoredAnswer.correctBlankAnswers,
+    matchingAnswers: skipped ? {} : scoredAnswer.matchingAnswers,
+    correctMatchingAnswers: scoredAnswer.correctMatchingAnswers,
+    orderingAnswerIds: skipped ? [] : scoredAnswer.orderingAnswerIds,
+    correctOrderIds: scoredAnswer.correctOrderIds,
+    skipped,
     isCorrect: scored.isCorrect,
     pointsEarned: scored.pointsEarned + speedBonus,
     pointsPossible: question.points,
     timeTakenSeconds,
     explanationSnapshot: question.explanation,
+    questionImageUrl: question.imageUrl,
+    questionImageAlt: question.imageAlt,
+    questionImageCaption: question.imageCaption,
     optionsSnapshot: question.options,
+    blanksSnapshot: question.blanks,
+    matchPairsSnapshot: question.matchPairs,
+    orderItemsSnapshot: question.orderItems,
+    unit: question.unit,
+    tolerance: question.tolerance,
+    passageTitle: question.passageTitle,
+    passageText: question.passageText,
+    assertionText: question.assertionText,
+    reasonText: question.reasonText,
     answeredAt: serverTimestamp()
   };
 }
@@ -904,7 +929,7 @@ export async function submitRoomAnswer({
       correctCount: player.correctCount + (payload.isCorrect ? 1 : 0),
       wrongCount:
         player.wrongCount +
-        (!payload.isCorrect && !payload.selectedAnswer && !payload.selectedAnswers.length ? 0 : payload.isCorrect ? 0 : 1),
+        (!payload.isCorrect && !isSkippedAnswer(answer, question) ? 1 : 0),
       lastSeenAt: serverTimestamp()
     });
   });

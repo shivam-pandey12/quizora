@@ -6,7 +6,7 @@ Quizora includes an explicit starter-content seed for production launch preparat
 
 - 16 active public categories.
 - 48 published public quizzes.
-- 480 original questions with answer explanations.
+- 480 original questions with answer explanations across single-choice, multiple-choice, true-false, short-answer, fill-blank, matching, ordering, and assertion-reason formats.
 - 6 featured quizzes and 6 featured categories.
 - A hero quiz and active daily challenge schedule.
 - 24 badge definition documents.

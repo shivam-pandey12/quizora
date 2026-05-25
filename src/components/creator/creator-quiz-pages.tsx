@@ -2,6 +2,8 @@
 
 import {
   Archive,
+  ArrowDown,
+  ArrowUp,
   CheckCircle2,
   ClipboardCheck,
   Eye,
@@ -26,6 +28,8 @@ import { Card } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FieldError } from "@/components/ui/field-error";
+import { ImageDisplay } from "@/components/ui/image-display";
+import { ImageUploadCard } from "@/components/ui/image-upload-card";
 import { Input } from "@/components/ui/input";
 import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
 import { PageHeader } from "@/components/ui/page-header";
@@ -58,6 +62,16 @@ import {
 } from "@/lib/firestore/creator";
 import { createSlug } from "@/lib/firestore/slug";
 import { formatDate } from "@/lib/firestore/timestamps";
+import {
+  creatorMaxOptions,
+  assertionReasonOptions,
+  getDefaultQuestionByType,
+  getQuestionTypeLabel,
+  optionQuestionTypes,
+  permanentQuestionTypes,
+  trueFalseOptions,
+  validateQuestionByType
+} from "@/lib/quiz/question-engine";
 import { titleCase } from "@/lib/utils";
 import type {
   Category,
@@ -75,11 +89,7 @@ import type {
 
 const difficulties: QuizDifficulty[] = ["easy", "medium", "hard", "expert"];
 const reviewTabs: Array<QuizReviewStatus | "all"> = ["all", "draft", "submitted", "approved", "rejected"];
-const questionTypes: Array<Exclude<QuestionType, "text">> = [
-  "single-choice",
-  "multiple-choice",
-  "true-false"
-];
+const questionTypes: QuestionType[] = permanentQuestionTypes.filter((type) => type !== "text");
 
 function AccessState({ compact = false }: { compact?: boolean }) {
   const { user, profile, loading, authReady } = useAuth();
@@ -182,37 +192,44 @@ function buildQuizInputFromState(state: QuizFormState): QuizInput {
 }
 
 function questionBlank(quizId: string, order: number): QuestionInput {
-  return {
-    quizId,
-    type: "single-choice",
-    questionText: "",
-    options: [
-      { id: "a", text: "" },
-      { id: "b", text: "" },
-      { id: "c", text: "" },
-      { id: "d", text: "" }
-    ],
-    correctAnswer: "",
-    correctAnswers: [],
-    explanation: "",
-    imageUrl: "",
-    points: 2,
-    timeLimitSeconds: 30,
-    order,
-    status: "active"
-  };
+  return getDefaultQuestionByType({ quizId, order });
 }
 
 function questionToInput(question: Question): QuestionInput {
   return {
     quizId: question.quizId,
-    type: question.type === "text" ? "single-choice" : question.type,
+    type: question.type === "text" ? "short-answer" : question.type,
     questionText: question.questionText,
     options: question.options.length ? question.options : questionBlank(question.quizId, question.order).options,
     correctAnswer: question.correctAnswer,
     correctAnswers: question.correctAnswers,
+    correctOptionId: question.correctOptionId ?? question.correctAnswer,
+    correctOptionIds: question.correctOptionIds ?? question.correctAnswers,
+    correctText: question.correctText ?? "",
+    acceptableAnswers: question.acceptableAnswers ?? [],
+    caseSensitive: question.caseSensitive ?? false,
+    trimWhitespace: question.trimWhitespace ?? true,
+    correctNumber: question.correctNumber ?? null,
+    tolerance: question.tolerance ?? 0,
+    unit: question.unit ?? "",
+    allowEquivalentUnits: question.allowEquivalentUnits ?? false,
+    blanks: question.blanks ?? [],
+    blankScoring: question.blankScoring ?? "all-or-nothing",
+    matchPairs: question.matchPairs ?? [],
+    shuffleRight: question.shuffleRight ?? true,
+    orderItems: question.orderItems ?? [],
+    correctOrderIds: question.correctOrderIds ?? [],
+    assertionText: question.assertionText ?? "",
+    reasonText: question.reasonText ?? "",
+    passageTitle: question.passageTitle ?? "",
+    passageText: question.passageText ?? "",
+    passageImageUrl: question.passageImageUrl ?? "",
+    passageImageAlt: question.passageImageAlt ?? "",
     explanation: question.explanation,
     imageUrl: question.imageUrl,
+    imagePath: question.imagePath ?? "",
+    imageAlt: question.imageAlt ?? "",
+    imageCaption: question.imageCaption ?? "",
     points: question.points,
     timeLimitSeconds: question.timeLimitSeconds,
     order: question.order,
@@ -225,7 +242,7 @@ function qualityChecklist(quiz: Quiz | null, questions: Question[]) {
   return [
     { label: "Quiz title, slug, category, and descriptions are complete", done: Boolean(quiz?.title && quiz?.slug && quiz?.categoryId && quiz?.description && quiz?.shortDescription) },
     { label: "At least five active questions are added", done: active.length >= 5 },
-    { label: "Every active question has a valid answer", done: active.every((question) => question.type === "multiple-choice" ? question.correctAnswers.length > 0 : Boolean(question.correctAnswer)) },
+    { label: "Every active question has a valid answer", done: active.every((question) => validateQuestionByType(question, { maxOptions: creatorMaxOptions }).valid) },
     { label: "Every active question has an explanation", done: active.every((question) => Boolean(question.explanation.trim())) },
     { label: "Content is original, safe for students, and not copied", done: true }
   ];
@@ -532,6 +549,10 @@ export function CreatorQuizFormPage({ quizId }: { quizId?: string }) {
             status: nextQuiz.status,
             visibility: "private",
             thumbnailUrl: nextQuiz.thumbnailUrl,
+            coverImageUrl: nextQuiz.coverImageUrl ?? "",
+            coverImagePath: nextQuiz.coverImagePath ?? "",
+            coverImageAlt: nextQuiz.coverImageAlt ?? "",
+            coverImageCaption: nextQuiz.coverImageCaption ?? "",
             tags: nextQuiz.tags,
             estimatedMinutes: nextQuiz.estimatedMinutes,
             timeLimitSeconds: nextQuiz.timeLimitSeconds,
@@ -635,6 +656,38 @@ export function CreatorQuizFormPage({ quizId }: { quizId?: string }) {
           </div>
           <label className="grid gap-2"><span className="text-sm font-semibold">Short description</span><Input value={form.shortDescription} onChange={(event) => update("shortDescription", event.target.value)} /></label>
           <label className="grid gap-2"><span className="text-sm font-semibold">Full description</span><Textarea value={form.description} onChange={(event) => update("description", event.target.value)} /></label>
+          <ImageUploadCard
+            caption
+            description="Used on cards and previews after an admin approves the quiz for public publishing."
+            disabled={saving}
+            disabledReason={!quizId ? "Create the quiz draft first, then upload a cover image." : undefined}
+            metadata={{
+              imageUrl: form.coverImageUrl || form.thumbnailUrl || "",
+              imagePath: form.coverImagePath ?? "",
+              imageAlt: form.coverImageAlt ?? "",
+              imageCaption: form.coverImageCaption ?? ""
+            }}
+            onChange={(metadata) =>
+              setForm((current) =>
+                current
+                  ? {
+                      ...current,
+                      coverImageUrl: metadata.imageUrl,
+                      coverImagePath: metadata.imagePath,
+                      coverImageAlt: metadata.imageAlt,
+                      coverImageCaption: metadata.imageCaption ?? "",
+                      thumbnailUrl: metadata.imageUrl
+                        ? metadata.imageUrl
+                        : current.thumbnailUrl === current.coverImageUrl
+                          ? ""
+                          : current.thumbnailUrl
+                    }
+                  : current
+              )
+            }
+            target={quizId ? { kind: "quiz-cover", quizId } : undefined}
+            title="Quiz cover image"
+          />
           <div className="grid gap-4 lg:grid-cols-4">
             <label className="grid gap-2"><span className="text-sm font-semibold">Category</span><Select value={form.categoryId} onChange={(event) => update("categoryId", event.target.value)}>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</Select></label>
             <label className="grid gap-2"><span className="text-sm font-semibold">Difficulty</span><Select value={form.difficulty} onChange={(event) => update("difficulty", event.target.value as QuizDifficulty)}>{difficulties.map((difficulty) => <option key={difficulty} value={difficulty}>{titleCase(difficulty)}</option>)}</Select></label>
@@ -693,13 +746,34 @@ export function CreatorQuizQuestionsPage({ quizId }: { quizId: string }) {
   function setOption(index: number, option: QuestionOption) {
     setForm((current) => ({ ...current, options: current.options.map((item, itemIndex) => itemIndex === index ? option : item) }));
   }
-  function changeType(type: Exclude<QuestionType, "text">) {
+  function changeType(type: QuestionType) {
     setForm((current) => ({
       ...current,
+      ...getDefaultQuestionByType({ quizId, order: current.order, type }),
+      questionText: current.questionText,
+      explanation: current.explanation,
+      imageUrl: current.imageUrl,
+      imagePath: current.imagePath,
+      imageAlt: current.imageAlt,
+      imageCaption: current.imageCaption,
+      points: current.points,
+      timeLimitSeconds: current.timeLimitSeconds,
+      order: current.order,
       type,
-      options: type === "true-false" ? [{ id: "true", text: "True" }, { id: "false", text: "False" }] : current.options.length >= 2 ? current.options : questionBlank(quizId, current.order).options,
+      options:
+        type === "true-false"
+          ? trueFalseOptions()
+          : type === "assertion-reason"
+            ? assertionReasonOptions()
+            : optionQuestionTypes.includes(type) || type === "multiple-choice"
+              ? current.options.length >= 2
+                ? current.options.slice(0, creatorMaxOptions)
+                : questionBlank(quizId, current.order).options
+              : [],
       correctAnswer: "",
-      correctAnswers: []
+      correctAnswers: [],
+      correctOptionId: type === "true-false" ? "true" : "",
+      correctOptionIds: []
     }));
   }
   async function saveQuestion(event: FormEvent) {
@@ -733,6 +807,12 @@ export function CreatorQuizQuestionsPage({ quizId }: { quizId: string }) {
     }
   }
 
+  const usesOptions =
+    form.type === "true-false" ||
+    form.type === "multiple-choice" ||
+    optionQuestionTypes.includes(form.type);
+  const canEditOptions = form.type !== "true-false" && form.type !== "assertion-reason";
+
   return (
     <section className="container-page space-y-6 pb-16">
       <PageHeader eyebrow="Creator questions" title={quiz?.title || "Quiz questions"} description="Add original questions with clear answers and explanations. Text-answer questions stay disabled for creator publishing in this version." />
@@ -746,6 +826,16 @@ export function CreatorQuizQuestionsPage({ quizId }: { quizId: string }) {
                   <Badge>#{question.order}</Badge><Badge>{question.type}</Badge><StatusBadge value={question.status}>{titleCase(question.status)}</StatusBadge>
                 </div>
                 <h3 className="mt-2 font-semibold">{question.questionText}</h3>
+                {question.imageUrl ? (
+                  <ImageDisplay
+                    alt={question.imageAlt || question.questionText}
+                    caption={question.imageCaption}
+                    className="mt-3 rounded-2xl"
+                    compact
+                    imageClassName="max-h-44"
+                    src={question.imageUrl}
+                  />
+                ) : null}
                 <p className="mt-2 text-sm text-muted-foreground">{question.explanation}</p>
                 <div className="mt-4 flex flex-wrap gap-2">
                   <Button size="sm" variant="secondary" onClick={() => { setEditingId(question.id); setForm(questionToInput(question)); }} icon={<Pencil className="size-4" />}>Edit</Button>
@@ -758,24 +848,183 @@ export function CreatorQuizQuestionsPage({ quizId }: { quizId: string }) {
         <Card className="p-5">
           <SectionHeader title={editingId ? "Edit question" : "Add question"} />
           <form className="mt-5 grid gap-4" onSubmit={saveQuestion}>
-            <label className="grid gap-2"><span className="text-sm font-semibold">Type</span><Select value={form.type} onChange={(event) => changeType(event.target.value as Exclude<QuestionType, "text">)}>{questionTypes.map((type) => <option key={type} value={type}>{titleCase(type)}</option>)}</Select></label>
+            <label className="grid gap-2"><span className="text-sm font-semibold">Type</span><Select value={form.type} onChange={(event) => changeType(event.target.value as QuestionType)}>{questionTypes.map((type) => <option key={type} value={type}>{getQuestionTypeLabel(type)}</option>)}</Select></label>
             <label className="grid gap-2"><span className="text-sm font-semibold">Question</span><Textarea value={form.questionText} onChange={(event) => setForm((current) => ({ ...current, questionText: event.target.value }))} /></label>
-            {form.type !== "true-false" ? form.options.map((option, index) => (
-              <label className="grid gap-2" key={option.id}><span className="text-sm font-semibold">Option {index + 1}</span><Input value={option.text} onChange={(event) => setOption(index, { ...option, text: event.target.value })} /></label>
-            )) : null}
-            {form.type !== "multiple-choice" ? (
-              <label className="grid gap-2"><span className="text-sm font-semibold">Correct answer</span><Select value={form.correctAnswer} onChange={(event) => setForm((current) => ({ ...current, correctAnswer: event.target.value }))}>{form.options.filter((option) => option.text.trim()).map((option) => <option key={option.id} value={option.id}>{option.text}</option>)}</Select></label>
-            ) : (
-              <div className="grid gap-2">
-                <span className="text-sm font-semibold">Correct answers</span>
-                {form.options.filter((option) => option.text.trim()).map((option) => (
-                  <label className="flex gap-3 rounded-2xl border border-border bg-surface/70 p-3 text-sm" key={option.id}>
-                    <input checked={form.correctAnswers.includes(option.id)} onChange={(event) => setForm((current) => ({ ...current, correctAnswers: event.target.checked ? [...current.correctAnswers, option.id] : current.correctAnswers.filter((id) => id !== option.id) }))} type="checkbox" />
-                    {option.text}
+            <ImageUploadCard
+              caption
+              compact
+              description="Optional visual prompt for maps, diagrams, charts, or image-identification questions."
+              disabled={saving}
+              disabledReason={!editingId ? "Save the question first, then upload a question image." : undefined}
+              metadata={{
+                imageUrl: form.imageUrl,
+                imagePath: form.imagePath ?? "",
+                imageAlt: form.imageAlt ?? "",
+                imageCaption: form.imageCaption ?? ""
+              }}
+              onChange={(metadata) =>
+                setForm((current) => ({
+                  ...current,
+                  imageUrl: metadata.imageUrl,
+                  imagePath: metadata.imagePath,
+                  imageAlt: metadata.imageAlt,
+                  imageCaption: metadata.imageCaption ?? ""
+                }))
+              }
+              target={editingId ? { kind: "question-image", quizId, questionId: editingId } : undefined}
+              title="Question image"
+            />
+            {usesOptions ? (
+              <div className="grid gap-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold">Options</span>
+                  {canEditOptions ? <Button disabled={form.options.length >= creatorMaxOptions} onClick={() => setForm((current) => {
+                    const nextIndex = current.options.length;
+                    const label = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"[nextIndex] ?? String(nextIndex + 1);
+                    return {
+                      ...current,
+                      options: [
+                        ...current.options,
+                        { id: crypto.randomUUID(), label, text: "", imageUrl: "", imagePath: "", imageAlt: "" }
+                      ]
+                    };
+                  })} size="sm" type="button" variant="secondary">Add option</Button> : null}
+                </div>
+                {form.options.map((option, index) => (
+              <div className="grid gap-3 rounded-2xl border border-border bg-surface/70 p-3" key={option.id}>
+                <div className="flex flex-wrap items-end gap-3">
+                  <label className="grid w-20 gap-2">
+                    <span className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Label</span>
+                    <Input disabled={!canEditOptions} value={option.label ?? "ABCDEFGHIJKLMNOPQRSTUVWXYZ"[index] ?? String(index + 1)} onChange={(event) => setOption(index, { ...option, label: event.target.value })} />
                   </label>
+                  <label className="grid min-w-0 flex-1 gap-2">
+                    <span className="text-sm font-semibold">Option {index + 1}</span>
+                    <Input disabled={!canEditOptions} value={option.text} onChange={(event) => setOption(index, { ...option, text: event.target.value })} />
+                  </label>
+                  {canEditOptions ? (
+                    <div className="flex gap-2">
+                      <Button
+                        aria-label={`Move option ${index + 1} up`}
+                        className="h-10 w-10 px-0"
+                        disabled={index === 0}
+                        icon={<ArrowUp className="size-4" />}
+                        onClick={() => setForm((current) => {
+                          const options = [...current.options];
+                          [options[index - 1], options[index]] = [options[index], options[index - 1]];
+                          return { ...current, options };
+                        })}
+                        size="sm"
+                        type="button"
+                        variant="secondary"
+                      />
+                      <Button
+                        aria-label={`Move option ${index + 1} down`}
+                        className="h-10 w-10 px-0"
+                        disabled={index === form.options.length - 1}
+                        icon={<ArrowDown className="size-4" />}
+                        onClick={() => setForm((current) => {
+                          const options = [...current.options];
+                          [options[index], options[index + 1]] = [options[index + 1], options[index]];
+                          return { ...current, options };
+                        })}
+                        size="sm"
+                        type="button"
+                        variant="secondary"
+                      />
+                      <Button
+                        aria-label={`Remove option ${index + 1}`}
+                        className="h-10 w-10 px-0"
+                        disabled={form.options.length <= 2}
+                        icon={<Trash2 className="size-4" />}
+                        onClick={() => setForm((current) => {
+                          const removedId = option.id;
+                          const nextOptions = current.options.filter((item) => item.id !== removedId);
+                          const nextCorrectIds = (current.correctOptionIds ?? current.correctAnswers).filter((id) => id !== removedId);
+                          const wasSingleCorrect = (current.correctOptionId || current.correctAnswer) === removedId;
+                          return {
+                            ...current,
+                            options: nextOptions,
+                            correctAnswer: wasSingleCorrect ? "" : current.correctAnswer,
+                            correctAnswers: nextCorrectIds,
+                            correctOptionId: wasSingleCorrect ? "" : current.correctOptionId,
+                            correctOptionIds: nextCorrectIds
+                          };
+                        })}
+                        size="sm"
+                        type="button"
+                        variant="ghost"
+                      />
+                    </div>
+                  ) : null}
+                </div>
+                {canEditOptions ? <ImageUploadCard
+                  compact
+                  description="Optional visual answer option."
+                  disabled={saving}
+                  disabledReason={!editingId ? "Save the question first, then upload option images." : undefined}
+                  metadata={{
+                    imageUrl: option.imageUrl ?? "",
+                    imagePath: option.imagePath ?? "",
+                    imageAlt: option.imageAlt ?? ""
+                  }}
+                  onChange={(metadata) =>
+                    setOption(index, {
+                      ...option,
+                      imageUrl: metadata.imageUrl,
+                      imagePath: metadata.imagePath,
+                      imageAlt: metadata.imageAlt
+                    })
+                  }
+                  target={
+                    editingId
+                      ? { kind: "option-image", quizId, questionId: editingId, optionId: option.id }
+                      : undefined
+                  }
+                  title={`Option ${index + 1} image`}
+                /> : null}
+                {form.type === "multiple-choice" ? (
+                  <label className="flex gap-3 text-sm font-semibold"><input checked={(form.correctOptionIds ?? form.correctAnswers).includes(option.id)} onChange={(event) => setForm((current) => {
+                    const base = current.correctOptionIds ?? current.correctAnswers;
+                    const next = event.target.checked ? [...base, option.id] : base.filter((id) => id !== option.id);
+                    return { ...current, correctAnswers: next, correctOptionIds: next };
+                  })} type="checkbox" />Correct answer</label>
+                ) : (
+                  <label className="flex gap-3 text-sm font-semibold"><input checked={(form.correctOptionId || form.correctAnswer) === option.id} onChange={() => setForm((current) => ({ ...current, correctAnswer: option.id, correctOptionId: option.id }))} type="radio" />Correct answer</label>
+                )}
+              </div>
                 ))}
               </div>
-            )}
+            ) : null}
+            {form.type === "short-answer" ? (
+              <div className="grid gap-3">
+                <label className="grid gap-2"><span className="text-sm font-semibold">Accepted answer</span><Input value={form.correctText || form.correctAnswer} onChange={(event) => setForm((current) => ({ ...current, correctText: event.target.value, correctAnswer: event.target.value }))} /></label>
+                <label className="grid gap-2"><span className="text-sm font-semibold">Alternate accepted answers</span><Input value={(form.acceptableAnswers ?? []).join(", ")} onChange={(event) => setForm((current) => ({ ...current, acceptableAnswers: event.target.value.split(",").map((item) => item.trim()).filter(Boolean) }))} /></label>
+              </div>
+            ) : null}
+            {form.type === "numeric" ? (
+              <div className="grid gap-3 sm:grid-cols-3">
+                <label className="grid gap-2"><span className="text-sm font-semibold">Correct number</span><Input type="number" value={form.correctNumber ?? ""} onChange={(event) => setForm((current) => ({ ...current, correctNumber: Number(event.target.value) }))} /></label>
+                <label className="grid gap-2"><span className="text-sm font-semibold">Tolerance</span><Input min={0} type="number" value={form.tolerance ?? 0} onChange={(event) => setForm((current) => ({ ...current, tolerance: Number(event.target.value) }))} /></label>
+                <label className="grid gap-2"><span className="text-sm font-semibold">Unit</span><Input value={form.unit ?? ""} onChange={(event) => setForm((current) => ({ ...current, unit: event.target.value }))} /></label>
+              </div>
+            ) : null}
+            {form.type === "fill-blank" ? (
+              <div className="grid gap-3">
+                {(form.blanks ?? []).map((blank) => <div className="grid gap-2 rounded-2xl border border-border bg-surface/70 p-3" key={blank.id}><Input value={blank.label} onChange={(event) => setForm((current) => ({ ...current, blanks: (current.blanks ?? []).map((item) => item.id === blank.id ? { ...item, label: event.target.value } : item) }))} /><Input placeholder="Accepted answers, comma separated" value={blank.acceptableAnswers.join(", ")} onChange={(event) => setForm((current) => ({ ...current, blanks: (current.blanks ?? []).map((item) => item.id === blank.id ? { ...item, acceptableAnswers: event.target.value.split(",").map((answer) => answer.trim()).filter(Boolean) } : item) }))} /></div>)}
+              </div>
+            ) : null}
+            {form.type === "matching" ? (
+              <div className="grid gap-3">{(form.matchPairs ?? []).map((pair) => <div className="grid gap-2 rounded-2xl border border-border bg-surface/70 p-3 sm:grid-cols-2" key={pair.id}><Input placeholder="Left item" value={pair.left} onChange={(event) => setForm((current) => ({ ...current, matchPairs: (current.matchPairs ?? []).map((item) => item.id === pair.id ? { ...item, left: event.target.value } : item) }))} /><Input placeholder="Right match" value={pair.right} onChange={(event) => setForm((current) => ({ ...current, matchPairs: (current.matchPairs ?? []).map((item) => item.id === pair.id ? { ...item, right: event.target.value } : item) }))} /></div>)}</div>
+            ) : null}
+            {form.type === "ordering" ? (
+              <div className="grid gap-3">{(form.orderItems ?? []).map((item, index) => <Input key={item.id} placeholder={`Item ${index + 1}`} value={item.text} onChange={(event) => setForm((current) => ({ ...current, orderItems: (current.orderItems ?? []).map((entry) => entry.id === item.id ? { ...entry, text: event.target.value } : entry), correctOrderIds: (current.orderItems ?? []).map((entry) => entry.id) }))} />)}</div>
+            ) : null}
+            {form.type === "assertion-reason" ? (
+              <div className="grid gap-3"><Textarea placeholder="Assertion" value={form.assertionText ?? ""} onChange={(event) => setForm((current) => ({ ...current, assertionText: event.target.value }))} /><Textarea placeholder="Reason" value={form.reasonText ?? ""} onChange={(event) => setForm((current) => ({ ...current, reasonText: event.target.value }))} /></div>
+            ) : null}
+            {form.type === "passage" ? (
+              <div className="grid gap-3"><Input placeholder="Passage title" value={form.passageTitle ?? ""} onChange={(event) => setForm((current) => ({ ...current, passageTitle: event.target.value }))} /><Textarea placeholder="Passage text" value={form.passageText ?? ""} onChange={(event) => setForm((current) => ({ ...current, passageText: event.target.value }))} /></div>
+            ) : null}
             <label className="grid gap-2"><span className="text-sm font-semibold">Explanation</span><Textarea value={form.explanation} onChange={(event) => setForm((current) => ({ ...current, explanation: event.target.value }))} /></label>
             <div className="grid gap-3 sm:grid-cols-3">
               <label className="grid gap-2">
@@ -862,16 +1111,50 @@ export function CreatorQuizPreviewPage({ quizId }: { quizId: string }) {
       <div className="grid gap-6 xl:grid-cols-[1fr_24rem]">
         <Card className="p-6">
           <div className="flex flex-wrap gap-2"><StatusBadge value={quiz.reviewStatus}>{titleCase(quiz.reviewStatus)}</StatusBadge><Badge>{quiz.categoryName}</Badge><Badge>{quiz.difficulty}</Badge></div>
+          {quiz.coverImageUrl || quiz.thumbnailUrl ? (
+            <ImageDisplay
+              alt={quiz.coverImageAlt || quiz.title}
+              caption={quiz.coverImageCaption}
+              className="mt-5"
+              imageClassName="max-h-80"
+              src={quiz.coverImageUrl || quiz.thumbnailUrl}
+            />
+          ) : null}
           <p className="mt-4 text-muted-foreground">{quiz.shortDescription}</p>
           <div className="mt-6 grid gap-4">
             {questions.map((question) => (
               <div className="rounded-3xl border border-border bg-surface/70 p-4" key={question.id}>
                 <Badge>Question {question.order}</Badge>
                 <h3 className="mt-3 text-lg font-semibold">{question.questionText}</h3>
+                {question.imageUrl ? (
+                  <ImageDisplay
+                    alt={question.imageAlt || question.questionText}
+                    caption={question.imageCaption}
+                    className="mt-3 rounded-2xl"
+                    compact
+                    imageClassName="max-h-56"
+                    src={question.imageUrl}
+                  />
+                ) : null}
                 <div className="mt-3 grid gap-2">
                   {question.options.map((option) => {
-                    const correct = question.type === "multiple-choice" ? question.correctAnswers.includes(option.id) : question.correctAnswer === option.id;
-                    return <div className={`rounded-2xl border p-3 text-sm ${correct ? "border-emerald-500/40 bg-emerald-500/10" : "border-border bg-surface/70"}`} key={option.id}>{option.text}</div>;
+                    const correct = question.type === "multiple-choice"
+                      ? (question.correctOptionIds ?? question.correctAnswers).includes(option.id)
+                      : (question.correctOptionId || question.correctAnswer) === option.id;
+                    return (
+                      <div className={`rounded-2xl border p-3 text-sm ${correct ? "border-emerald-500/40 bg-emerald-500/10" : "border-border bg-surface/70"}`} key={option.id}>
+                        {option.imageUrl ? (
+                          <ImageDisplay
+                            alt={option.imageAlt || option.text}
+                            className="mb-2 rounded-xl"
+                            compact
+                            imageClassName="max-h-36"
+                            src={option.imageUrl}
+                          />
+                        ) : null}
+                        {option.text || option.imageAlt || option.id}
+                      </div>
+                    );
                   })}
                 </div>
                 <p className="mt-3 text-sm text-muted-foreground"><span className="font-semibold text-foreground">Explanation:</span> {question.explanation || "Missing explanation."}</p>

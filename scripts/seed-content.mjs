@@ -148,17 +148,27 @@ function validatePack(pack) {
     questionsByQuiz.set(question.quizSlug, list);
     assert(quizSlugs.has(question.quizSlug), `Question for missing quiz ${question.quizSlug}.`, errors);
     assert(question.questionText.length >= 20, `Question ${question.quizSlug} #${question.order} text is too short.`, errors);
-    assert(["single-choice", "multiple-choice", "true-false"].includes(question.type), `Question ${question.quizSlug} #${question.order} has unsupported type.`, errors);
-    assert(question.options.length >= 2, `Question ${question.quizSlug} #${question.order} needs options.`, errors);
+    assert(["single-choice", "multiple-choice", "true-false", "short-answer", "fill-blank", "matching", "ordering", "assertion-reason"].includes(question.type), `Question ${question.quizSlug} #${question.order} has unsupported type.`, errors);
     assert(question.explanation.length >= 20, `Question ${question.quizSlug} #${question.order} needs an explanation.`, errors);
     assert(question.points > 0, `Question ${question.quizSlug} #${question.order} needs points.`, errors);
     assert(question.timeLimitSeconds > 0, `Question ${question.quizSlug} #${question.order} needs a timer.`, errors);
     const optionIds = new Set(question.options.map((option) => option.id));
+    if (["single-choice", "multiple-choice", "true-false", "assertion-reason"].includes(question.type)) {
+      assert(question.options.length >= 2, `Question ${question.quizSlug} #${question.order} needs options.`, errors);
+    }
     if (question.type === "multiple-choice") {
       assert(question.correctAnswers.length >= 1, `Multiple-choice question ${question.quizSlug} #${question.order} needs correct answers.`, errors);
       question.correctAnswers.forEach((id) => assert(optionIds.has(id), `Question ${question.quizSlug} #${question.order} has invalid correct answer ${id}.`, errors));
-    } else {
+    } else if (["single-choice", "true-false", "assertion-reason"].includes(question.type)) {
       assert(optionIds.has(question.correctAnswer), `Question ${question.quizSlug} #${question.order} correct answer is not an option.`, errors);
+    } else if (question.type === "short-answer") {
+      assert(Boolean(question.correctText || question.correctAnswer), `Short-answer question ${question.quizSlug} #${question.order} needs accepted text.`, errors);
+    } else if (question.type === "fill-blank") {
+      assert(Array.isArray(question.blanks) && question.blanks.every((blank) => blank.acceptableAnswers?.length), `Fill-blank question ${question.quizSlug} #${question.order} needs accepted blank answers.`, errors);
+    } else if (question.type === "matching") {
+      assert(Array.isArray(question.matchPairs) && question.matchPairs.length >= 2, `Matching question ${question.quizSlug} #${question.order} needs pairs.`, errors);
+    } else if (question.type === "ordering") {
+      assert(Array.isArray(question.orderItems) && question.orderItems.length >= 2, `Ordering question ${question.quizSlug} #${question.order} needs order items.`, errors);
     }
   });
 

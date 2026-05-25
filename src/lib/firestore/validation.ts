@@ -1,4 +1,5 @@
 import { isValidSlug } from "@/lib/firestore/slug";
+import { validateQuestionByType } from "@/lib/quiz/question-engine";
 import type {
   CategoryInput,
   QuestionInput,
@@ -57,6 +58,10 @@ export function validatePublishReady(quiz: Quiz, activeQuestionCount: number): V
     status: quiz.status,
     visibility: quiz.visibility,
     thumbnailUrl: quiz.thumbnailUrl,
+    coverImageUrl: quiz.coverImageUrl,
+    coverImagePath: quiz.coverImagePath,
+    coverImageAlt: quiz.coverImageAlt,
+    coverImageCaption: quiz.coverImageCaption,
     tags: quiz.tags,
     estimatedMinutes: quiz.estimatedMinutes,
     timeLimitSeconds: quiz.timeLimitSeconds,
@@ -78,39 +83,5 @@ export function validatePublishReady(quiz: Quiz, activeQuestionCount: number): V
 }
 
 export function validateQuestionInput(input: QuestionInput): ValidationResult {
-  const errors: Record<string, string> = {};
-  const activeOptions = input.options.filter((option) => option.text.trim());
-
-  if (!input.questionText.trim()) errors.questionText = "Question text is required.";
-  if (input.points <= 0) errors.points = "Points must be positive.";
-  if (input.timeLimitSeconds < 0) errors.timeLimitSeconds = "Time limit cannot be negative.";
-
-  if (input.type === "single-choice" || input.type === "multiple-choice") {
-    if (activeOptions.length < 2) errors.options = "Add at least two answer options.";
-  }
-
-  if (input.type === "single-choice" || input.type === "true-false") {
-    if (!input.correctAnswer) errors.correctAnswer = "Choose the correct answer.";
-    if (
-      input.correctAnswer &&
-      !activeOptions.some((option) => option.id === input.correctAnswer)
-    ) {
-      errors.correctAnswer = "Correct answer must match an option.";
-    }
-  }
-
-  if (input.type === "multiple-choice") {
-    if (input.correctAnswers.length < 1) {
-      errors.correctAnswers = "Choose at least one correct answer.";
-    }
-    if (
-      input.correctAnswers.some(
-        (answerId) => !activeOptions.some((option) => option.id === answerId)
-      )
-    ) {
-      errors.correctAnswers = "All correct answers must match active options.";
-    }
-  }
-
-  return result(errors);
+  return validateQuestionByType(input);
 }

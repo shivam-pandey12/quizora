@@ -22,6 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ImageDisplay } from "@/components/ui/image-display";
 import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
 import { SectionHeader } from "@/components/ui/section-header";
 import { StatCard } from "@/components/ui/stat-card";
@@ -40,14 +41,25 @@ import { cn, formatSeconds, titleCase } from "@/lib/utils";
 import type { Attempt, AttemptAnswer, LeaderboardEntry } from "@/types/domain";
 
 function answerIsSkipped(answer: AttemptAnswer) {
-  return !answer.selectedAnswer && answer.selectedAnswers.length === 0;
+  if (typeof answer.skipped === "boolean") return answer.skipped;
+  return (
+    !answer.selectedAnswer &&
+    answer.selectedAnswers.length === 0 &&
+    !answer.textAnswer?.trim() &&
+    !answer.numericAnswer?.trim() &&
+    !Object.values(answer.blankAnswers ?? {}).some((value) => value.trim()) &&
+    !Object.values(answer.matchingAnswers ?? {}).some(Boolean) &&
+    !(answer.orderingAnswerIds ?? []).length
+  );
 }
 
 function optionLabel(answer: AttemptAnswer, optionId: string) {
-  return answer.optionsSnapshot.find((option) => option.id === optionId)?.text || optionId;
+  const option = answer.optionsSnapshot.find((item) => item.id === optionId);
+  return option?.text || option?.imageAlt || optionId;
 }
 
 function selectedAnswerText(answer: AttemptAnswer) {
+  if (answer.selectedAnswerSummary) return answer.selectedAnswerSummary;
   if (answer.selectedAnswers.length) {
     return answer.selectedAnswers.map((id) => optionLabel(answer, id)).join(", ");
   }
@@ -60,6 +72,7 @@ function selectedAnswerText(answer: AttemptAnswer) {
 }
 
 function correctAnswerText(answer: AttemptAnswer) {
+  if (answer.correctAnswerSummary) return answer.correctAnswerSummary;
   if (answer.correctAnswers.length) {
     return answer.correctAnswers.map((id) => optionLabel(answer, id)).join(", ");
   }
@@ -559,6 +572,15 @@ export function ResultView({ attemptId }: { attemptId: string }) {
                       <h2 className="mt-3 text-xl font-semibold">
                         {index + 1}. {answer.questionTextSnapshot}
                       </h2>
+                      {answer.questionImageUrl ? (
+                        <ImageDisplay
+                          alt={answer.questionImageAlt || answer.questionTextSnapshot}
+                          caption={answer.questionImageCaption}
+                          className="mt-4 max-w-3xl"
+                          imageClassName="max-h-80"
+                          src={answer.questionImageUrl}
+                        />
+                      ) : null}
                     </div>
                     <Badge>
                       {answer.pointsEarned} / {answer.pointsPossible} pts
@@ -609,13 +631,75 @@ export function ResultView({ attemptId }: { attemptId: string }) {
                             )}
                             key={option.id}
                           >
-                            <span>{option.text}</span>
+                            <span className="min-w-0 flex-1">
+                              {option.imageUrl ? (
+                                <ImageDisplay
+                                  alt={option.imageAlt || option.text}
+                                  className="mb-3 rounded-2xl"
+                                  compact
+                                  imageClassName="max-h-40"
+                                  src={option.imageUrl}
+                                />
+                              ) : null}
+                              <span>{option.text || option.imageAlt || option.id}</span>
+                            </span>
                             <span className="text-xs font-semibold">
                               {correct ? "Correct" : selected ? "Selected" : ""}
                             </span>
                           </div>
                         );
                       })}
+                    </div>
+                  ) : null}
+
+                  {answer.blanksSnapshot?.length || answer.matchPairsSnapshot?.length || answer.orderItemsSnapshot?.length ? (
+                    <div className="mt-4 grid gap-3 rounded-3xl border border-border bg-surface/60 p-4 text-sm">
+                      {answer.blanksSnapshot?.length ? (
+                        <div>
+                          <p className="font-semibold text-foreground">Blank-by-blank</p>
+                          <div className="mt-2 grid gap-2">
+                            {answer.blanksSnapshot.map((blank) => (
+                              <div className="rounded-2xl bg-muted/35 p-3" key={blank.id}>
+                                <span className="font-semibold">{blank.label}: </span>
+                                <span>{answer.blankAnswers?.[blank.id] || "Skipped"}</span>
+                                <span className="text-muted-foreground"> / {(answer.correctBlankAnswers?.[blank.id] ?? []).join(" or ")}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                      {answer.matchPairsSnapshot?.length ? (
+                        <div>
+                          <p className="font-semibold text-foreground">Matching pairs</p>
+                          <div className="mt-2 grid gap-2">
+                            {answer.matchPairsSnapshot.map((pair) => {
+                              const selected = answer.matchingAnswers?.[pair.id];
+                              const selectedPair = answer.matchPairsSnapshot?.find((item) => item.id === selected);
+                              const selectedText = selected === answer.correctMatchingAnswers?.[pair.id]
+                                ? pair.right
+                                : selectedPair?.right;
+                              return (
+                                <div className="rounded-2xl bg-muted/35 p-3" key={pair.id}>
+                                  <span className="font-semibold">{pair.left}</span>
+                                  <span> to {selectedText || (selected ? "selected choice" : "not matched")}</span>
+                                  <span className="text-muted-foreground"> / {pair.right}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ) : null}
+                      {answer.orderItemsSnapshot?.length ? (
+                        <div>
+                          <p className="font-semibold text-foreground">Ordering</p>
+                          <p className="mt-2 text-muted-foreground">
+                            Your order: {(answer.orderingAnswerIds ?? []).map((id) => answer.orderItemsSnapshot?.find((item) => item.id === id)?.text || id).join(" to ") || "Skipped"}
+                          </p>
+                          <p className="mt-1 text-success">
+                            Correct order: {(answer.correctOrderIds ?? []).map((id) => answer.orderItemsSnapshot?.find((item) => item.id === id)?.text || id).join(" to ")}
+                          </p>
+                        </div>
+                      ) : null}
                     </div>
                   ) : null}
 

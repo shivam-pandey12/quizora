@@ -2,7 +2,18 @@ export type QuizDifficulty = "easy" | "medium" | "hard" | "expert";
 export type QuizStatus = "draft" | "published" | "archived";
 export type QuizVisibility = "public" | "private";
 export type CategoryStatus = "active" | "hidden";
-export type QuestionType = "single-choice" | "multiple-choice" | "true-false" | "text";
+export type QuestionType =
+  | "single-choice"
+  | "multiple-choice"
+  | "true-false"
+  | "short-answer"
+  | "numeric"
+  | "fill-blank"
+  | "matching"
+  | "ordering"
+  | "assertion-reason"
+  | "passage"
+  | "text";
 export type QuestionStatus = "active" | "hidden";
 export type UserRole = "user" | "admin";
 export type CreatorStatus = "none" | "pending" | "approved" | "suspended";
@@ -87,8 +98,30 @@ export type RefundStatus = "requested" | "reviewing" | "processed" | "rejected";
 
 export interface QuestionOption {
   id: string;
+  label?: string;
   text: string;
   imageUrl?: string;
+  imagePath?: string;
+  imageAlt?: string;
+  isCorrect?: boolean;
+}
+
+export interface QuestionBlank {
+  id: string;
+  label: string;
+  acceptableAnswers: string[];
+  caseSensitive?: boolean;
+}
+
+export interface MatchPair {
+  id: string;
+  left: string;
+  right: string;
+}
+
+export interface OrderItem {
+  id: string;
+  text: string;
 }
 
 export interface BillingPlan {
@@ -265,6 +298,10 @@ export interface Quiz {
   status: QuizStatus;
   visibility: QuizVisibility;
   thumbnailUrl: string;
+  coverImageUrl?: string;
+  coverImagePath?: string;
+  coverImageAlt?: string;
+  coverImageCaption?: string;
   tags: string[];
   estimatedMinutes: number;
   questionCount: number;
@@ -324,8 +361,33 @@ export interface Question {
   options: QuestionOption[];
   correctAnswer: string;
   correctAnswers: string[];
+  correctOptionId?: string;
+  correctOptionIds?: string[];
+  correctText?: string;
+  acceptableAnswers?: string[];
+  caseSensitive?: boolean;
+  trimWhitespace?: boolean;
+  correctNumber?: number | null;
+  tolerance?: number | null;
+  unit?: string;
+  allowEquivalentUnits?: boolean;
+  blanks?: QuestionBlank[];
+  blankScoring?: "all-or-nothing";
+  matchPairs?: MatchPair[];
+  shuffleRight?: boolean;
+  orderItems?: OrderItem[];
+  correctOrderIds?: string[];
+  assertionText?: string;
+  reasonText?: string;
+  passageTitle?: string;
+  passageText?: string;
+  passageImageUrl?: string;
+  passageImageAlt?: string;
   explanation: string;
   imageUrl: string;
+  imagePath?: string;
+  imageAlt?: string;
+  imageCaption?: string;
   points: number;
   timeLimitSeconds: number;
   order: number;
@@ -341,6 +403,19 @@ export interface PlayQuestion {
   questionText: string;
   options: QuestionOption[];
   imageUrl: string;
+  imageAlt?: string;
+  imageCaption?: string;
+  unit?: string;
+  blanks?: Array<Pick<QuestionBlank, "id" | "label">>;
+  matchingLeftItems?: Array<{ id: string; text: string }>;
+  matchingRightItems?: Array<{ id: string; text: string }>;
+  orderItems?: OrderItem[];
+  assertionText?: string;
+  reasonText?: string;
+  passageTitle?: string;
+  passageText?: string;
+  passageImageUrl?: string;
+  passageImageAlt?: string;
   points: number;
   timeLimitSeconds: number;
   order: number;
@@ -349,7 +424,14 @@ export interface PlayQuestion {
 export interface QuizAnswerState {
   selectedAnswer: string;
   selectedAnswers: string[];
+  selectedOptionId?: string;
+  selectedOptionIds?: string[];
+  booleanAnswer?: boolean | null;
   textAnswer: string;
+  numericAnswer?: string;
+  blankAnswers?: Record<string, string>;
+  matchingAnswers?: Record<string, string>;
+  orderingAnswerIds?: string[];
   timeSpentSeconds: number;
 }
 
@@ -410,12 +492,35 @@ export interface AttemptAnswer {
   selectedAnswers: string[];
   correctAnswer: string;
   correctAnswers: string[];
+  selectedAnswerSummary?: string;
+  correctAnswerSummary?: string;
+  textAnswer?: string;
+  numericAnswer?: string;
+  blankAnswers?: Record<string, string>;
+  correctBlankAnswers?: Record<string, string[]>;
+  matchingAnswers?: Record<string, string>;
+  correctMatchingAnswers?: Record<string, string>;
+  orderingAnswerIds?: string[];
+  correctOrderIds?: string[];
+  skipped?: boolean;
   isCorrect: boolean;
   pointsEarned: number;
   pointsPossible: number;
   timeSpentSeconds: number;
   explanationSnapshot: string;
+  questionImageUrl?: string;
+  questionImageAlt?: string;
+  questionImageCaption?: string;
   optionsSnapshot: QuestionOption[];
+  blanksSnapshot?: QuestionBlank[];
+  matchPairsSnapshot?: MatchPair[];
+  orderItemsSnapshot?: OrderItem[];
+  unit?: string;
+  tolerance?: number | null;
+  passageTitle?: string;
+  passageText?: string;
+  assertionText?: string;
+  reasonText?: string;
 }
 
 export interface Attempt {
@@ -612,12 +717,35 @@ export interface RoomAnswer {
   selectedAnswers: string[];
   correctAnswer: string;
   correctAnswers: string[];
+  selectedAnswerSummary?: string;
+  correctAnswerSummary?: string;
+  textAnswer?: string;
+  numericAnswer?: string;
+  blankAnswers?: Record<string, string>;
+  correctBlankAnswers?: Record<string, string[]>;
+  matchingAnswers?: Record<string, string>;
+  correctMatchingAnswers?: Record<string, string>;
+  orderingAnswerIds?: string[];
+  correctOrderIds?: string[];
+  skipped?: boolean;
   isCorrect: boolean;
   pointsEarned: number;
   pointsPossible: number;
   timeTakenSeconds: number;
   explanationSnapshot: string;
+  questionImageUrl?: string;
+  questionImageAlt?: string;
+  questionImageCaption?: string;
   optionsSnapshot: QuestionOption[];
+  blanksSnapshot?: QuestionBlank[];
+  matchPairsSnapshot?: MatchPair[];
+  orderItemsSnapshot?: OrderItem[];
+  unit?: string;
+  tolerance?: number | null;
+  passageTitle?: string;
+  passageText?: string;
+  assertionText?: string;
+  reasonText?: string;
   trusted: boolean;
   scoringSource: ScoringSource;
   securityFlags: SecurityFlag[];
@@ -742,7 +870,17 @@ export interface FlashQuestion {
   options: QuestionOption[];
   correctAnswer: string;
   correctAnswers: string[];
+  correctOptionId?: string;
+  correctOptionIds?: string[];
+  correctText?: string;
+  acceptableAnswers?: string[];
+  caseSensitive?: boolean;
+  trimWhitespace?: boolean;
   explanation: string;
+  imageUrl?: string;
+  imagePath?: string;
+  imageAlt?: string;
+  imageCaption?: string;
   points: number;
   timeLimitSeconds: number;
   order: number;
@@ -785,6 +923,7 @@ export interface FlashAnswer {
   questionIndex: number;
   selectedAnswer: string;
   selectedAnswers: string[];
+  textAnswer?: string;
   isCorrect: boolean;
   pointsEarned: number;
   pointsPossible: number;
@@ -1276,6 +1415,10 @@ export interface QuizCardItem {
   title: string;
   description: string;
   shortDescription?: string;
+  coverImageUrl?: string;
+  coverImageAlt?: string;
+  coverImageCaption?: string;
+  thumbnailUrl?: string;
   categoryName: string;
   categorySlug?: string;
   difficulty: QuizDifficulty;

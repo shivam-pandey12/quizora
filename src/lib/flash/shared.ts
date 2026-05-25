@@ -7,6 +7,7 @@ import type {
   PlayQuestion,
   QuizAnswerState
 } from "@/types/domain";
+import { getSafeQuestionPayload, scoreQuestionAnswer } from "@/lib/quiz/question-engine";
 
 export const flashCodeAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
@@ -33,60 +34,15 @@ export function isFlashExpired(flashQuiz: Pick<FlashQuiz, "expiresAt" | "status"
 }
 
 export function safeFlashQuestion(question: FlashQuestion): PlayQuestion {
-  return {
-    id: question.id,
-    quizId: question.flashQuizId,
-    type: question.type,
-    questionText: question.questionText,
-    options: question.options,
-    imageUrl: "",
-    points: question.points,
-    timeLimitSeconds: question.timeLimitSeconds,
-    order: question.order
-  };
-}
-
-function normalizeText(value: string) {
-  return value.trim().toLowerCase().replace(/\s+/g, " ");
-}
-
-function sameSet(left: string[], right: string[]) {
-  if (left.length !== right.length) return false;
-  const normalized = new Set(left);
-  return right.every((item) => normalized.has(item));
+  return getSafeQuestionPayload({ ...question, quizId: question.flashQuizId });
 }
 
 export function scoreFlashAnswer(question: FlashQuestion, answer: QuizAnswerState) {
-  if (question.type === "multiple-choice") {
-    const correctAnswers = question.correctAnswers.length
-      ? question.correctAnswers
-      : question.correctAnswer
-        ? [question.correctAnswer]
-        : [];
-    const selected = answer.selectedAnswers.filter(Boolean);
-    const isCorrect = selected.length > 0 && sameSet(selected, correctAnswers);
-    return {
-      isCorrect,
-      pointsEarned: isCorrect ? question.points : 0,
-      pointsPossible: question.points
-    };
-  }
-
-  if (question.type === "text") {
-    const isCorrect = Boolean(question.correctAnswer) && normalizeText(answer.textAnswer) === normalizeText(question.correctAnswer);
-    return {
-      isCorrect,
-      pointsEarned: isCorrect ? question.points : 0,
-      pointsPossible: question.points
-    };
-  }
-
-  const selected = answer.selectedAnswer;
-  const isCorrect = Boolean(selected) && selected === question.correctAnswer;
+  const scored = scoreQuestionAnswer({ ...question, quizId: question.flashQuizId }, answer);
   return {
-    isCorrect,
-    pointsEarned: isCorrect ? question.points : 0,
-    pointsPossible: question.points
+    isCorrect: scored.isCorrect,
+    pointsEarned: scored.pointsEarned,
+    pointsPossible: scored.pointsPossible
   };
 }
 

@@ -16,11 +16,28 @@ Quizora starter content is designed to feel useful and trustworthy, not like fil
 
 Each starter quiz has 10 active questions:
 
-- 8 single-choice questions.
+- 6 single-choice questions.
 - 1 multiple-choice question.
 - 1 true-false question.
+- 1 short-answer or fill-blank question.
+- 1 matching, ordering, or assertion-reason question.
 
-No text-answer questions are included in v1 because trusted scoring should remain predictable for starter content.
+Starter content uses only auto-scored types. Long-answer, subjective, AI-graded, and file-upload answers are not seeded.
+
+## Supported Question Types
+
+- Single-choice: one correct option.
+- Multiple-choice: exact set match; no partial credit in v1.
+- True-false: fixed True / False choices.
+- Short-answer: normalized exact match against accepted answers.
+- Numeric: exact number with tolerance; units are display-only in v1.
+- Fill-blank: all blanks must match accepted answers.
+- Matching: all pairs must match exactly.
+- Ordering: all items must be in exact order.
+- Assertion-reason: scored as a single-choice question.
+- Passage: per-question context, not nested child sections in v1.
+
+Creators can use up to 8 options on option-based questions. Admins can use up to 10.
 
 ## Difficulty Defaults
 

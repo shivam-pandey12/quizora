@@ -10,6 +10,7 @@ import {
 } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
+import { getStorage } from "firebase-admin/storage";
 
 let cachedApp: App | null = null;
 
@@ -62,7 +63,10 @@ export function getAdminApp() {
   const serviceAccount = serviceAccountFromEnv();
   cachedApp = initializeApp({
     credential: serviceAccount ? cert(serviceAccount) : applicationDefault(),
-    projectId: serviceAccount?.projectId || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    projectId: serviceAccount?.projectId || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+    storageBucket:
+      process.env.FIREBASE_STORAGE_BUCKET ||
+      process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
   });
   return cachedApp;
 }
@@ -73,6 +77,16 @@ export function getAdminAuth() {
 
 export function getAdminDb() {
   return getFirestore(getAdminApp());
+}
+
+export function getAdminStorageBucket() {
+  const bucketName =
+    process.env.FIREBASE_STORAGE_BUCKET ||
+    process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
+  if (!bucketName) {
+    throw new Error("Firebase Storage bucket is not configured.");
+  }
+  return getStorage(getAdminApp()).bucket(bucketName);
 }
 
 export async function verifyFirebaseBearerToken(request: Request) {

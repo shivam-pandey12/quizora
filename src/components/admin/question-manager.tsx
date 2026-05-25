@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { FieldError } from "@/components/ui/field-error";
+import { ImageDisplay } from "@/components/ui/image-display";
+import { ImageUploadCard } from "@/components/ui/image-upload-card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -23,37 +25,26 @@ import {
   updateQuestion
 } from "@/lib/firestore/content";
 import { validateQuestionInput } from "@/lib/firestore/validation";
+import {
+  adminMaxOptions,
+  assertionReasonOptions,
+  getDefaultQuestionByType,
+  getQuestionTypeLabel,
+  optionQuestionTypes,
+  permanentQuestionTypes,
+  trueFalseOptions
+} from "@/lib/quiz/question-engine";
 import { formatSeconds, titleCase } from "@/lib/utils";
 import type { Question, QuestionInput, QuestionOption, QuestionType, Quiz } from "@/types/domain";
 
-const questionTypes: QuestionType[] = ["single-choice", "multiple-choice", "true-false", "text"];
+const questionTypes: QuestionType[] = permanentQuestionTypes;
 
 function option(text = ""): QuestionOption {
-  return { id: crypto.randomUUID(), text };
-}
-
-function trueFalseOptions(): QuestionOption[] {
-  return [
-    { id: "true", text: "True" },
-    { id: "false", text: "False" }
-  ];
+  return { id: crypto.randomUUID(), text, imageUrl: "", imagePath: "", imageAlt: "" };
 }
 
 function emptyQuestion(quizId: string, order: number): QuestionInput {
-  return {
-    quizId,
-    type: "single-choice",
-    questionText: "",
-    options: [option(), option()],
-    correctAnswer: "",
-    correctAnswers: [],
-    explanation: "",
-    imageUrl: "",
-    points: 10,
-    timeLimitSeconds: 0,
-    order,
-    status: "active"
-  };
+  return { ...getDefaultQuestionByType({ quizId, order }), points: 10, timeLimitSeconds: 0 };
 }
 
 export function QuestionManager({ quizId }: { quizId: string }) {
@@ -110,31 +101,35 @@ export function QuestionManager({ quizId }: { quizId: string }) {
   function setType(type: QuestionType) {
     setFieldErrors({});
     setForm((current) => {
-      if (type === "true-false") {
-        return {
-          ...current,
-          type,
-          options: trueFalseOptions(),
-          correctAnswer: "true",
-          correctAnswers: []
-        };
-      }
-      if (type === "text") {
-        return {
-          ...current,
-          type,
-          options: [],
-          correctAnswer: "",
-          correctAnswers: []
-        };
-      }
-      const options = current.options.length >= 2 ? current.options : [option(), option()];
+      const defaults = getDefaultQuestionByType({ quizId, order: current.order, type });
+      const options =
+        type === "true-false"
+          ? trueFalseOptions()
+          : type === "assertion-reason"
+            ? assertionReasonOptions()
+            : optionQuestionTypes.includes(type) || type === "multiple-choice"
+              ? current.options.length >= 2
+                ? current.options.slice(0, adminMaxOptions)
+                : defaults.options
+              : [];
       return {
         ...current,
+        ...defaults,
+        questionText: current.questionText,
+        explanation: current.explanation,
+        imageUrl: current.imageUrl,
+        imagePath: current.imagePath,
+        imageAlt: current.imageAlt,
+        imageCaption: current.imageCaption,
+        points: current.points,
+        timeLimitSeconds: current.timeLimitSeconds,
+        order: current.order,
         type,
         options,
-        correctAnswer: type === "single-choice" ? current.correctAnswer : "",
-        correctAnswers: type === "multiple-choice" ? current.correctAnswers : []
+        correctAnswer: type === "true-false" ? "true" : "",
+        correctAnswers: [],
+        correctOptionId: type === "true-false" ? "true" : "",
+        correctOptionIds: []
       };
     });
   }
@@ -149,8 +144,33 @@ export function QuestionManager({ quizId }: { quizId: string }) {
       options: question.options,
       correctAnswer: question.correctAnswer,
       correctAnswers: question.correctAnswers,
+      correctOptionId: question.correctOptionId ?? question.correctAnswer,
+      correctOptionIds: question.correctOptionIds ?? question.correctAnswers,
+      correctText: question.correctText ?? "",
+      acceptableAnswers: question.acceptableAnswers ?? [],
+      caseSensitive: question.caseSensitive ?? false,
+      trimWhitespace: question.trimWhitespace ?? true,
+      correctNumber: question.correctNumber ?? null,
+      tolerance: question.tolerance ?? 0,
+      unit: question.unit ?? "",
+      allowEquivalentUnits: question.allowEquivalentUnits ?? false,
+      blanks: question.blanks ?? [],
+      blankScoring: question.blankScoring ?? "all-or-nothing",
+      matchPairs: question.matchPairs ?? [],
+      shuffleRight: question.shuffleRight ?? true,
+      orderItems: question.orderItems ?? [],
+      correctOrderIds: question.correctOrderIds ?? [],
+      assertionText: question.assertionText ?? "",
+      reasonText: question.reasonText ?? "",
+      passageTitle: question.passageTitle ?? "",
+      passageText: question.passageText ?? "",
+      passageImageUrl: question.passageImageUrl ?? "",
+      passageImageAlt: question.passageImageAlt ?? "",
       explanation: question.explanation,
       imageUrl: question.imageUrl,
+      imagePath: question.imagePath ?? "",
+      imageAlt: question.imageAlt ?? "",
+      imageCaption: question.imageCaption ?? "",
       points: question.points,
       timeLimitSeconds: question.timeLimitSeconds,
       order: question.order,
@@ -158,10 +178,10 @@ export function QuestionManager({ quizId }: { quizId: string }) {
     });
   }
 
-  function updateOption(id: string, text: string) {
+  function updateOption(id: string, patch: Partial<QuestionOption>) {
     setForm((current) => ({
       ...current,
-      options: current.options.map((item) => (item.id === id ? { ...item, text } : item))
+      options: current.options.map((item) => (item.id === id ? { ...item, ...patch } : item))
     }));
   }
 
@@ -170,7 +190,9 @@ export function QuestionManager({ quizId }: { quizId: string }) {
       ...current,
       options: current.options.filter((item) => item.id !== id),
       correctAnswer: current.correctAnswer === id ? "" : current.correctAnswer,
-      correctAnswers: current.correctAnswers.filter((answerId) => answerId !== id)
+      correctAnswers: current.correctAnswers.filter((answerId) => answerId !== id),
+      correctOptionId: current.correctOptionId === id ? "" : current.correctOptionId,
+      correctOptionIds: current.correctOptionIds?.filter((answerId) => answerId !== id) ?? []
     }));
   }
 
@@ -179,18 +201,34 @@ export function QuestionManager({ quizId }: { quizId: string }) {
       ...current,
       correctAnswers: checked
         ? Array.from(new Set([...current.correctAnswers, id]))
-        : current.correctAnswers.filter((answerId) => answerId !== id)
+        : current.correctAnswers.filter((answerId) => answerId !== id),
+      correctOptionIds: checked
+        ? Array.from(new Set([...(current.correctOptionIds ?? current.correctAnswers), id]))
+        : (current.correctOptionIds ?? current.correctAnswers).filter((answerId) => answerId !== id)
     }));
+  }
+
+  function moveOption(id: string, direction: -1 | 1) {
+    setForm((current) => {
+      const index = current.options.findIndex((item) => item.id === id);
+      const target = index + direction;
+      if (index < 0 || target < 0 || target >= current.options.length) return current;
+      const next = [...current.options];
+      [next[index], next[target]] = [next[target], next[index]];
+      return { ...current, options: next };
+    });
   }
 
   async function submitForm(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const normalized = {
       ...form,
-      options: form.options.filter((item) => item.text.trim()),
-      correctAnswers: form.type === "multiple-choice" ? form.correctAnswers : [],
+      options: form.options.filter((item) => item.text.trim() || item.imageUrl?.trim()),
+      correctOptionId: form.correctOptionId || form.correctAnswer,
+      correctOptionIds: form.correctOptionIds?.length ? form.correctOptionIds : form.correctAnswers,
+      correctAnswers: form.type === "multiple-choice" ? (form.correctOptionIds?.length ? form.correctOptionIds : form.correctAnswers) : [],
       correctAnswer:
-        form.type === "single-choice" || form.type === "true-false" ? form.correctAnswer : form.correctAnswer
+        form.type === "multiple-choice" ? "" : form.correctOptionId || form.correctAnswer || form.correctText || ""
     };
     const validation = validateQuestionInput(normalized);
     setFieldErrors(validation.errors);
@@ -271,6 +309,12 @@ export function QuestionManager({ quizId }: { quizId: string }) {
     }
   }
 
+  const usesOptions =
+    form.type === "true-false" ||
+    form.type === "multiple-choice" ||
+    optionQuestionTypes.includes(form.type);
+  const canEditOptions = form.type !== "true-false" && form.type !== "assertion-reason";
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -316,7 +360,7 @@ export function QuestionManager({ quizId }: { quizId: string }) {
               >
                 {questionTypes.map((type) => (
                   <option key={type} value={type}>
-                    {titleCase(type)}
+                    {getQuestionTypeLabel(type)}
                   </option>
                 ))}
               </Select>
@@ -372,22 +416,37 @@ export function QuestionManager({ quizId }: { quizId: string }) {
             />
             <FieldError message={fieldErrors.questionText} />
           </label>
-          <label className="grid gap-2 text-sm font-semibold">
-            Image URL
-            <Input
-              disabled={saving}
-              onChange={(event) => setForm((current) => ({ ...current, imageUrl: event.target.value }))}
-              placeholder="Optional image URL"
-              value={form.imageUrl}
-            />
-          </label>
+          <ImageUploadCard
+            caption
+            description="Optional diagram, map, graph, or visual prompt for this question."
+            disabled={saving}
+            disabledReason={!editing ? "Save the question first, then upload a question image." : undefined}
+            metadata={{
+              imageUrl: form.imageUrl,
+              imagePath: form.imagePath ?? "",
+              imageAlt: form.imageAlt ?? "",
+              imageCaption: form.imageCaption ?? ""
+            }}
+            onChange={(metadata) =>
+              setForm((current) => ({
+                ...current,
+                imageUrl: metadata.imageUrl,
+                imagePath: metadata.imagePath,
+                imageAlt: metadata.imageAlt,
+                imageCaption: metadata.imageCaption ?? ""
+              }))
+            }
+            target={editing ? { kind: "question-image", quizId, questionId: editing.id } : undefined}
+            title="Question image"
+          />
 
-          {form.type !== "text" ? (
+          {usesOptions ? (
             <div className="grid gap-3">
               <div className="flex items-center justify-between gap-3">
                 <p className="text-sm font-semibold">Options</p>
-                {form.type !== "true-false" ? (
+                {canEditOptions ? (
                   <Button
+                    disabled={saving || form.options.length >= adminMaxOptions}
                     onClick={() => setForm((current) => ({ ...current, options: [...current.options, option()] }))}
                     size="sm"
                     type="button"
@@ -397,17 +456,38 @@ export function QuestionManager({ quizId }: { quizId: string }) {
                   </Button>
                 ) : null}
               </div>
-              {form.options.map((item) => (
+              {form.options.map((item, index) => (
                 <div className="grid gap-2 rounded-2xl border border-border bg-surface/65 p-3" key={item.id}>
                   <div className="flex gap-2">
                     <Input
-                      disabled={saving || form.type === "true-false"}
-                      onChange={(event) => updateOption(item.id, event.target.value)}
+                      disabled={saving || !canEditOptions}
+                      onChange={(event) => updateOption(item.id, { text: event.target.value })}
                       placeholder="Answer option"
                       value={item.text}
                     />
-                    {form.type !== "true-false" ? (
+                    {canEditOptions ? (
                       <Button
+                        disabled={index === 0}
+                        onClick={() => moveOption(item.id, -1)}
+                        type="button"
+                        variant="ghost"
+                      >
+                        Up
+                      </Button>
+                    ) : null}
+                    {canEditOptions ? (
+                      <Button
+                        disabled={index === form.options.length - 1}
+                        onClick={() => moveOption(item.id, 1)}
+                        type="button"
+                        variant="ghost"
+                      >
+                        Down
+                      </Button>
+                    ) : null}
+                    {canEditOptions ? (
+                      <Button
+                        disabled={form.options.length <= 2}
                         onClick={() => removeOption(item.id)}
                         type="button"
                         variant="ghost"
@@ -428,31 +508,193 @@ export function QuestionManager({ quizId }: { quizId: string }) {
                   ) : (
                     <label className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
                       <input
-                        checked={form.correctAnswer === item.id}
+                        checked={(form.correctOptionId || form.correctAnswer) === item.id}
                         name="correctAnswer"
-                        onChange={() => setForm((current) => ({ ...current, correctAnswer: item.id }))}
+                        onChange={() => setForm((current) => ({ ...current, correctAnswer: item.id, correctOptionId: item.id }))}
                         type="radio"
                       />
                       Correct answer
                     </label>
                   )}
+                  {canEditOptions ? (
+                    <ImageUploadCard
+                      compact
+                      description="Optional visual answer option."
+                      disabled={saving}
+                      disabledReason={!editing ? "Save the question first, then upload option images." : undefined}
+                      metadata={{
+                        imageUrl: item.imageUrl ?? "",
+                        imagePath: item.imagePath ?? "",
+                        imageAlt: item.imageAlt ?? ""
+                      }}
+                      onChange={(metadata) =>
+                        updateOption(item.id, {
+                          imageUrl: metadata.imageUrl,
+                          imagePath: metadata.imagePath,
+                          imageAlt: metadata.imageAlt
+                        })
+                      }
+                      target={
+                        editing
+                          ? {
+                              kind: "option-image",
+                              quizId,
+                              questionId: editing.id,
+                              optionId: item.id
+                            }
+                          : undefined
+                      }
+                      title={`Option ${item.text || item.id} image`}
+                    />
+                  ) : null}
                 </div>
               ))}
               <FieldError message={fieldErrors.options} />
               <FieldError message={fieldErrors.correctAnswer} />
               <FieldError message={fieldErrors.correctAnswers} />
             </div>
-          ) : (
-            <label className="grid gap-2 text-sm font-semibold">
-              Text answer placeholder
-              <Input
-                disabled={saving}
-                onChange={(event) => setForm((current) => ({ ...current, correctAnswer: event.target.value }))}
-                placeholder="Stored for admin review; text scoring remains intentionally conservative."
-                value={form.correctAnswer}
-              />
-            </label>
-          )}
+          ) : null}
+
+          {form.type === "short-answer" || form.type === "text" ? (
+            <div className="grid gap-3 md:grid-cols-2">
+              <label className="grid gap-2 text-sm font-semibold">
+                Accepted answer
+                <Input
+                  disabled={saving}
+                  onChange={(event) => setForm((current) => ({ ...current, correctAnswer: event.target.value, correctText: event.target.value }))}
+                  placeholder="Example: photosynthesis"
+                  value={form.correctText || form.correctAnswer}
+                />
+                <FieldError message={fieldErrors.correctText} />
+              </label>
+              <label className="grid gap-2 text-sm font-semibold">
+                Alternate accepted answers
+                <Input
+                  disabled={saving}
+                  onChange={(event) => setForm((current) => ({ ...current, acceptableAnswers: event.target.value.split(",").map((item) => item.trim()).filter(Boolean) }))}
+                  placeholder="Comma separated"
+                  value={(form.acceptableAnswers ?? []).join(", ")}
+                />
+              </label>
+            </div>
+          ) : null}
+
+          {form.type === "numeric" ? (
+            <div className="grid gap-3 md:grid-cols-3">
+              <label className="grid gap-2 text-sm font-semibold">
+                Correct number
+                <Input
+                  disabled={saving}
+                  onChange={(event) => setForm((current) => ({ ...current, correctNumber: Number(event.target.value) }))}
+                  type="number"
+                  value={form.correctNumber ?? ""}
+                />
+                <FieldError message={fieldErrors.correctNumber} />
+              </label>
+              <label className="grid gap-2 text-sm font-semibold">
+                Tolerance
+                <Input
+                  disabled={saving}
+                  min={0}
+                  onChange={(event) => setForm((current) => ({ ...current, tolerance: Number(event.target.value) }))}
+                  type="number"
+                  value={form.tolerance ?? 0}
+                />
+              </label>
+              <label className="grid gap-2 text-sm font-semibold">
+                Unit label
+                <Input disabled={saving} onChange={(event) => setForm((current) => ({ ...current, unit: event.target.value }))} value={form.unit ?? ""} />
+              </label>
+            </div>
+          ) : null}
+
+          {form.type === "fill-blank" ? (
+            <div className="grid gap-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold">Blanks</p>
+                <Button onClick={() => setForm((current) => ({ ...current, blanks: [...(current.blanks ?? []), { id: crypto.randomUUID(), label: `Blank ${(current.blanks ?? []).length + 1}`, acceptableAnswers: [], caseSensitive: false }] }))} size="sm" type="button" variant="secondary">Add blank</Button>
+              </div>
+              {(form.blanks ?? []).map((blank, index) => (
+                <div className="grid gap-2 rounded-2xl border border-border bg-surface/65 p-3 md:grid-cols-[1fr_2fr_auto]" key={blank.id}>
+                  <Input disabled={saving} onChange={(event) => setForm((current) => ({ ...current, blanks: (current.blanks ?? []).map((item) => item.id === blank.id ? { ...item, label: event.target.value } : item) }))} value={blank.label} />
+                  <Input disabled={saving} onChange={(event) => setForm((current) => ({ ...current, blanks: (current.blanks ?? []).map((item) => item.id === blank.id ? { ...item, acceptableAnswers: event.target.value.split(",").map((answer) => answer.trim()).filter(Boolean) } : item) }))} placeholder="Accepted answers, comma separated" value={blank.acceptableAnswers.join(", ")} />
+                  <Button disabled={saving || (form.blanks ?? []).length <= 1} onClick={() => setForm((current) => ({ ...current, blanks: (current.blanks ?? []).filter((item) => item.id !== blank.id) }))} type="button" variant="ghost">Remove {index + 1}</Button>
+                </div>
+              ))}
+              <FieldError message={fieldErrors.blanks} />
+            </div>
+          ) : null}
+
+          {form.type === "matching" ? (
+            <div className="grid gap-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold">Matching pairs</p>
+                <Button onClick={() => setForm((current) => ({ ...current, matchPairs: [...(current.matchPairs ?? []), { id: crypto.randomUUID(), left: "", right: "" }] }))} size="sm" type="button" variant="secondary">Add pair</Button>
+              </div>
+              {(form.matchPairs ?? []).map((pair) => (
+                <div className="grid gap-2 rounded-2xl border border-border bg-surface/65 p-3 md:grid-cols-[1fr_1fr_auto]" key={pair.id}>
+                  <Input disabled={saving} onChange={(event) => setForm((current) => ({ ...current, matchPairs: (current.matchPairs ?? []).map((item) => item.id === pair.id ? { ...item, left: event.target.value } : item) }))} placeholder="Left item" value={pair.left} />
+                  <Input disabled={saving} onChange={(event) => setForm((current) => ({ ...current, matchPairs: (current.matchPairs ?? []).map((item) => item.id === pair.id ? { ...item, right: event.target.value } : item) }))} placeholder="Right match" value={pair.right} />
+                  <Button disabled={saving || (form.matchPairs ?? []).length <= 2} onClick={() => setForm((current) => ({ ...current, matchPairs: (current.matchPairs ?? []).filter((item) => item.id !== pair.id) }))} type="button" variant="ghost">Remove</Button>
+                </div>
+              ))}
+              <FieldError message={fieldErrors.matchPairs} />
+            </div>
+          ) : null}
+
+          {form.type === "ordering" ? (
+            <div className="grid gap-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold">Correct order</p>
+                <Button onClick={() => setForm((current) => ({ ...current, orderItems: [...(current.orderItems ?? []), { id: crypto.randomUUID(), text: "" }] }))} size="sm" type="button" variant="secondary">Add item</Button>
+              </div>
+              {(form.orderItems ?? []).map((item, index) => (
+                <div className="flex gap-2 rounded-2xl border border-border bg-surface/65 p-3" key={item.id}>
+                  <Input disabled={saving} onChange={(event) => setForm((current) => ({ ...current, orderItems: (current.orderItems ?? []).map((entry) => entry.id === item.id ? { ...entry, text: event.target.value } : entry), correctOrderIds: (current.orderItems ?? []).map((entry) => entry.id) }))} placeholder={`Item ${index + 1}`} value={item.text} />
+                  <Button disabled={saving || index === 0} onClick={() => setForm((current) => {
+                    const next = [...(current.orderItems ?? [])];
+                    [next[index - 1], next[index]] = [next[index], next[index - 1]];
+                    return { ...current, orderItems: next, correctOrderIds: next.map((entry) => entry.id) };
+                  })} type="button" variant="ghost">Up</Button>
+                  <Button disabled={saving || index === (form.orderItems ?? []).length - 1} onClick={() => setForm((current) => {
+                    const next = [...(current.orderItems ?? [])];
+                    [next[index + 1], next[index]] = [next[index], next[index + 1]];
+                    return { ...current, orderItems: next, correctOrderIds: next.map((entry) => entry.id) };
+                  })} type="button" variant="ghost">Down</Button>
+                </div>
+              ))}
+              <FieldError message={fieldErrors.orderItems} />
+            </div>
+          ) : null}
+
+          {form.type === "assertion-reason" ? (
+            <div className="grid gap-3 md:grid-cols-2">
+              <label className="grid gap-2 text-sm font-semibold">
+                Assertion
+                <Textarea disabled={saving} onChange={(event) => setForm((current) => ({ ...current, assertionText: event.target.value }))} value={form.assertionText ?? ""} />
+                <FieldError message={fieldErrors.assertionText} />
+              </label>
+              <label className="grid gap-2 text-sm font-semibold">
+                Reason
+                <Textarea disabled={saving} onChange={(event) => setForm((current) => ({ ...current, reasonText: event.target.value }))} value={form.reasonText ?? ""} />
+                <FieldError message={fieldErrors.reasonText} />
+              </label>
+            </div>
+          ) : null}
+
+          {form.type === "passage" ? (
+            <div className="grid gap-3">
+              <label className="grid gap-2 text-sm font-semibold">
+                Passage title
+                <Input disabled={saving} onChange={(event) => setForm((current) => ({ ...current, passageTitle: event.target.value }))} value={form.passageTitle ?? ""} />
+              </label>
+              <label className="grid gap-2 text-sm font-semibold">
+                Passage text
+                <Textarea disabled={saving} onChange={(event) => setForm((current) => ({ ...current, passageText: event.target.value }))} value={form.passageText ?? ""} />
+                <FieldError message={fieldErrors.passageText} />
+              </label>
+            </div>
+          ) : null}
 
           <label className="grid gap-2 text-sm font-semibold">
             Explanation
@@ -497,18 +739,38 @@ export function QuestionManager({ quizId }: { quizId: string }) {
                     <StatusBadge value="featured">#{question.order}</StatusBadge>
                   </div>
                   <h2 className="mt-3 text-xl font-semibold">{question.questionText}</h2>
+                  {question.imageUrl ? (
+                    <ImageDisplay
+                      alt={question.imageAlt || question.questionText}
+                      caption={question.imageCaption}
+                      className="mt-4 max-w-2xl"
+                      imageClassName="max-h-72"
+                      src={question.imageUrl}
+                    />
+                  ) : null}
                   {question.options.length ? (
                     <div className="mt-4 grid gap-2 sm:grid-cols-2">
                       {question.options.map((item) => {
                         const isCorrect =
                           question.correctAnswer === item.id ||
-                          question.correctAnswers.includes(item.id);
+                          question.correctOptionId === item.id ||
+                          question.correctAnswers.includes(item.id) ||
+                          (question.correctOptionIds ?? []).includes(item.id);
                         return (
                           <div
                             className="rounded-2xl border border-border bg-surface/70 p-3 text-sm"
                             key={item.id}
                           >
-                            <span>{item.text}</span>
+                            {item.imageUrl ? (
+                              <ImageDisplay
+                                alt={item.imageAlt || item.text}
+                                className="mb-3 rounded-2xl"
+                                compact
+                                imageClassName="max-h-36"
+                                src={item.imageUrl}
+                              />
+                            ) : null}
+                            <span>{item.text || item.imageAlt || item.id}</span>
                             {isCorrect ? (
                               <StatusBadge className="ml-2" value="active">
                                 Answer

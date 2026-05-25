@@ -94,6 +94,7 @@ function checkFirebaseConfig() {
   checkFile("apphosting.yaml");
   checkFile("firestore.rules");
   checkFile("firestore.indexes.json");
+  checkFile("storage.rules");
   const firebaseJson = JSON.parse(read("firebase.json") || "{}");
   if (firebaseJson.apphosting?.backendId) pass("Firebase App Hosting backendId configured");
   else warn("Firebase App Hosting backendId is not configured in firebase.json");
@@ -101,6 +102,8 @@ function checkFirebaseConfig() {
   else warn("Firestore database is not configured as (default) in firebase.json");
   if (firebaseJson.firestore?.location === "asia-south2") pass("Firestore location documents asia-south2");
   else warn("Firestore location is not asia-south2 in firebase.json");
+  if (firebaseJson.storage?.rules === "storage.rules") pass("Firebase Storage rules target configured");
+  else warn("Firebase Storage rules target is not configured in firebase.json");
 }
 
 function checkRoutes() {
@@ -228,6 +231,7 @@ const launchDocKeys = [
   "FIREBASE_SERVICE_ACCOUNT_JSON",
   "FIREBASE_SERVICE_ACCOUNT_BASE64",
   "FIREBASE_PROJECT_ID",
+  "FIREBASE_STORAGE_BUCKET",
   "FIREBASE_CLIENT_EMAIL",
   "FIREBASE_PRIVATE_KEY",
   "ATTEMPT_SESSION_SECRET",

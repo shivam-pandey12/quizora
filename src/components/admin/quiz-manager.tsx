@@ -16,6 +16,8 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { FieldError } from "@/components/ui/field-error";
+import { ImageDisplay } from "@/components/ui/image-display";
+import { ImageUploadCard } from "@/components/ui/image-upload-card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -53,6 +55,10 @@ function getEmptyQuiz(createdBy = ""): QuizInput {
     status: "draft",
     visibility: "public",
     thumbnailUrl: "",
+    coverImageUrl: "",
+    coverImagePath: "",
+    coverImageAlt: "",
+    coverImageCaption: "",
     tags: [],
     estimatedMinutes: 8,
     timeLimitSeconds: 0,
@@ -150,29 +156,31 @@ export function QuizManager() {
       });
   }, [category, difficulty, featured, query, quizzes, sort, status]);
 
-  const seoWarnings = useMemo(() => {
-    const warnings: string[] = [];
+  const publishingReadiness = useMemo(() => {
+    if (!form.title.trim() && !editing) return [];
+
+    const notes: string[] = [];
     const shortDescriptionLength = form.shortDescription.trim().length;
     const descriptionLength = form.description.trim().length;
 
     if (form.title.trim().length > 70) {
-      warnings.push("Title is longer than 70 characters; search previews may truncate it.");
+      notes.push("Shorten the title if possible. Search and social previews may cut off titles above 70 characters.");
     }
     if (form.slug.trim().length < 3) {
-      warnings.push("Slug is missing or too short for a stable public URL.");
+      notes.push("Add a stable slug for the public quiz URL, for example science-foundations.");
     }
     if (shortDescriptionLength > 0 && shortDescriptionLength < 50) {
-      warnings.push("Short description is thin; aim for 50-150 clear characters.");
+      notes.push("Expand the short description to 50-150 clear characters before publishing.");
     }
     if (descriptionLength > 0 && descriptionLength < 120) {
-      warnings.push("Full description is thin; add visible human-useful context before publishing.");
+      notes.push("Add more detail to the full description so players know what the quiz covers.");
     }
-    if (!form.thumbnailUrl.trim()) {
-      warnings.push("No thumbnail URL is set; quiz detail will use the default Quizora social preview.");
+    if (!(form.coverImageUrl || form.thumbnailUrl).trim()) {
+      notes.push("Optional: add a cover image for cards and social previews. If skipped, Quizora uses the generated visual theme.");
     }
 
-    return warnings;
-  }, [form.description, form.shortDescription, form.slug, form.thumbnailUrl, form.title]);
+    return notes;
+  }, [editing, form.coverImageUrl, form.description, form.shortDescription, form.slug, form.thumbnailUrl, form.title]);
 
   function updateTitle(title: string) {
     setForm((current) => ({
@@ -215,6 +223,10 @@ export function QuizManager() {
       status: quiz.status,
       visibility: quiz.visibility,
       thumbnailUrl: quiz.thumbnailUrl,
+      coverImageUrl: quiz.coverImageUrl ?? "",
+      coverImagePath: quiz.coverImagePath ?? "",
+      coverImageAlt: quiz.coverImageAlt ?? "",
+      coverImageCaption: quiz.coverImageCaption ?? "",
       tags: quiz.tags,
       estimatedMinutes: quiz.estimatedMinutes,
       timeLimitSeconds: quiz.timeLimitSeconds,
@@ -427,7 +439,51 @@ export function QuizManager() {
               <FieldError message={fieldErrors.status} />
             </label>
           </div>
-          <div className="grid gap-4 lg:grid-cols-3">
+          <div className="grid gap-4 lg:grid-cols-2">
+            <ImageUploadCard
+              caption
+              description="Used on quiz cards, quiz detail, featured sections, and social previews."
+              disabled={saving}
+              disabledReason={!editing ? "Save the quiz draft first, then upload a cover image." : undefined}
+              metadata={{
+                imageUrl: form.coverImageUrl || form.thumbnailUrl || "",
+                imagePath: form.coverImagePath ?? "",
+                imageAlt: form.coverImageAlt ?? "",
+                imageCaption: form.coverImageCaption ?? ""
+              }}
+              onChange={(metadata) =>
+                setForm((current) => ({
+                  ...current,
+                  coverImageUrl: metadata.imageUrl,
+                  coverImagePath: metadata.imagePath,
+                  coverImageAlt: metadata.imageAlt,
+                  coverImageCaption: metadata.imageCaption ?? "",
+                  thumbnailUrl: metadata.imageUrl
+                    ? metadata.imageUrl
+                    : current.thumbnailUrl === current.coverImageUrl
+                      ? ""
+                      : current.thumbnailUrl
+                }))
+              }
+              target={editing ? { kind: "quiz-cover", quizId: editing.id } : undefined}
+              title="Quiz cover image"
+            />
+            <label className="grid content-start gap-2 text-sm font-semibold">
+              Fallback thumbnail URL
+              <Input
+                disabled={saving}
+                onChange={(event) =>
+                  setForm((current) => ({ ...current, thumbnailUrl: event.target.value }))
+                }
+                placeholder="Optional existing image URL"
+                value={form.thumbnailUrl}
+              />
+              <span className="text-xs leading-5 text-muted-foreground">
+                Kept for legacy quizzes. Uploaded cover images automatically fill this value.
+              </span>
+            </label>
+          </div>
+          <div className="grid gap-4 lg:grid-cols-2">
             <label className="grid gap-2 text-sm font-semibold">
               Estimated minutes
               <Input
@@ -460,15 +516,6 @@ export function QuizManager() {
               />
               <FieldError message={fieldErrors.timeLimitSeconds} />
             </label>
-            <label className="grid gap-2 text-sm font-semibold">
-              Thumbnail URL
-              <Input
-                disabled={saving}
-                onChange={(event) => setForm((current) => ({ ...current, thumbnailUrl: event.target.value }))}
-                placeholder="https://..."
-                value={form.thumbnailUrl}
-              />
-            </label>
           </div>
           <label className="grid gap-2 text-sm font-semibold">
             Tags
@@ -479,15 +526,18 @@ export function QuizManager() {
               value={tagsValue}
             />
           </label>
-          {seoWarnings.length ? (
-            <div className="rounded-3xl border border-primary/20 bg-primary/10 p-4 text-sm text-primary">
-              <div className="flex items-center gap-2 font-semibold">
+          {publishingReadiness.length ? (
+            <div className="rounded-3xl border border-primary/20 bg-primary/8 p-4 text-sm">
+              <div className="flex items-center gap-2 font-semibold text-primary">
                 <AlertTriangle className="size-4" />
-                SEO quality notes
+                Publishing readiness
               </div>
-              <ul className="mt-3 grid gap-2 leading-6">
-                {seoWarnings.map((warning) => (
-                  <li key={warning}>{warning}</li>
+              <p className="mt-2 text-muted-foreground">
+                These are admin hints for public quiz pages. You can still save drafts while improving them.
+              </p>
+              <ul className="mt-3 grid gap-2 leading-6 text-muted-foreground">
+                {publishingReadiness.map((note) => (
+                  <li className="rounded-2xl border border-border/70 bg-surface/70 px-3 py-2" key={note}>{note}</li>
                 ))}
               </ul>
             </div>
@@ -580,7 +630,14 @@ export function QuizManager() {
         <div className="grid gap-4">
           {filtered.map((quiz) => (
             <Card className="p-5" key={quiz.id}>
-              <div className="grid gap-4 xl:grid-cols-[1fr_auto] xl:items-center">
+              <div className="grid gap-4 xl:grid-cols-[9rem_1fr_auto] xl:items-center">
+                <ImageDisplay
+                  alt={quiz.coverImageAlt || quiz.title}
+                  className="h-32 rounded-2xl"
+                  compact
+                  imageClassName="h-32 object-cover"
+                  src={quiz.coverImageUrl || quiz.thumbnailUrl}
+                />
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
                     <StatusBadge value={quiz.status} />

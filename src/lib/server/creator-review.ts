@@ -4,6 +4,7 @@ import type { DecodedIdToken } from "firebase-admin/auth";
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { isValidSlug } from "@/lib/firestore/slug";
+import { creatorMaxOptions, validateQuestionByType } from "@/lib/quiz/question-engine";
 import { requireServerAdmin, requireServerUser } from "@/lib/server/trusted-utils";
 
 type RawData = Record<string, unknown>;
@@ -15,10 +16,6 @@ function asString(value: unknown, fallback = "") {
 
 function asNumber(value: unknown, fallback = 0) {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
-}
-
-function asStringArray(value: unknown) {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }
 
 function isCreatorProfile(profile: RawData | null) {
@@ -109,41 +106,24 @@ async function validateCreatorQuizQuality(quizId: string) {
   let totalPoints = 0;
   activeQuestions.forEach(({ data }, index) => {
     const label = `Question ${index + 1}`;
-    const type = asString(data.type, "single-choice");
-    const options = Array.isArray(data.options)
-      ? data.options
-          .map((option) => ({
-            id: asString((option as RawData)?.id),
-            text: asString((option as RawData)?.text).trim()
-          }))
-          .filter((option) => option.id && option.text)
-      : [];
-    const optionIds = new Set(options.map((option) => option.id));
     const points = asNumber(data.points);
     const order = asNumber(data.order);
+    const validation = validateQuestionByType(
+      {
+        ...data,
+        id: "",
+        quizId,
+        createdAt: null,
+        updatedAt: null
+      },
+      { maxOptions: creatorMaxOptions }
+    );
 
     totalPoints += Math.max(0, points);
-    if (!asString(data.questionText).trim()) errors.push(`${label}: add question text.`);
+    Object.values(validation.errors).forEach((message) => errors.push(`${label}: ${message}`));
     if (!asString(data.explanation).trim()) errors.push(`${label}: add an explanation.`);
-    if (points <= 0) errors.push(`${label}: points must be positive.`);
     if (order <= 0 || orderValues.has(order)) errors.push(`${label}: order must be unique.`);
     orderValues.add(order);
-
-    if (type === "single-choice" || type === "multiple-choice") {
-      if (options.length < 2) errors.push(`${label}: add at least two options.`);
-    }
-    if (type === "single-choice" || type === "true-false") {
-      const answer = asString(data.correctAnswer);
-      if (!answer || !optionIds.has(answer)) errors.push(`${label}: choose a valid correct answer.`);
-    }
-    if (type === "multiple-choice") {
-      const answers = asStringArray(data.correctAnswers);
-      if (!answers.length) errors.push(`${label}: choose at least one correct answer.`);
-      if (answers.some((answer) => !optionIds.has(answer))) {
-        errors.push(`${label}: all correct answers must match options.`);
-      }
-    }
-    if (type === "text") errors.push(`${label}: text-answer questions are not enabled for creator publishing yet.`);
   });
 
   if (totalPoints <= 0) errors.push("Total points must be greater than zero.");

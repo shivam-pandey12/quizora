@@ -24,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ImageDisplay } from "@/components/ui/image-display";
 import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Textarea } from "@/components/ui/textarea";
@@ -32,6 +33,7 @@ import { useAuth } from "@/lib/auth/auth-provider";
 import { firebaseSetupMessage } from "@/lib/firebase/client";
 import { getPlayableQuiz } from "@/lib/firestore/attempts";
 import { clearPlayState, loadPlayState, savePlayState } from "@/lib/quiz/play-storage";
+import { isSkippedAnswer } from "@/lib/quiz/question-engine";
 import { startTrustedAttemptClient, submitTrustedAttemptClient } from "@/lib/trusted/client";
 import { cn, formatSeconds, titleCase } from "@/lib/utils";
 import type { PlayQuestion, QuestionOption, Quiz, QuizAnswerState, QuizPlayState } from "@/types/domain";
@@ -40,18 +42,20 @@ function emptyAnswer(): QuizAnswerState {
   return {
     selectedAnswer: "",
     selectedAnswers: [],
+    selectedOptionId: "",
+    selectedOptionIds: [],
+    booleanAnswer: null,
     textAnswer: "",
+    numericAnswer: "",
+    blankAnswers: {},
+    matchingAnswers: {},
+    orderingAnswerIds: [],
     timeSpentSeconds: 0
   };
 }
 
-function hasAnswer(answer: QuizAnswerState | undefined) {
-  if (!answer) return false;
-  return Boolean(
-    answer.selectedAnswer ||
-      answer.selectedAnswers.length ||
-      answer.textAnswer.trim()
-  );
+function hasAnswer(answer: QuizAnswerState | undefined, question?: PlayQuestion) {
+  return !isSkippedAnswer(answer, question);
 }
 
 function formatClock(seconds: number | null) {
@@ -347,7 +351,7 @@ export function QuizPlayer({ quizId }: { quizId: string }) {
     ? Math.round(((playState.currentIndex + 1) / Math.max(1, questions.length)) * 100)
     : 0;
   const unansweredCount = playState
-    ? questions.filter((question) => !hasAnswer(playState.answers[question.id])).length
+    ? questions.filter((question) => !hasAnswer(playState.answers[question.id], question)).length
     : questions.length;
   const lowTime = remainingSeconds !== null && remainingSeconds <= 60;
 
@@ -387,7 +391,7 @@ export function QuizPlayer({ quizId }: { quizId: string }) {
 
   const answerSummary = useMemo(() => {
     if (!playState) return { answered: 0, skipped: questions.length };
-    const answered = questions.filter((question) => hasAnswer(playState.answers[question.id])).length;
+    const answered = questions.filter((question) => hasAnswer(playState.answers[question.id], question)).length;
     return { answered, skipped: questions.length - answered };
   }, [playState, questions]);
 
@@ -578,6 +582,26 @@ export function QuizPlayer({ quizId }: { quizId: string }) {
                   <p className="text-sm font-semibold uppercase text-primary">
                     Question {playState.currentIndex + 1} of {questions.length}
                   </p>
+                  {currentQuestion.passageText ? (
+                    <div className="mt-3 rounded-3xl border border-border bg-muted/35 p-4 text-sm text-muted-foreground">
+                      {currentQuestion.passageTitle ? (
+                        <p className="mb-2 font-semibold text-foreground">{currentQuestion.passageTitle}</p>
+                      ) : null}
+                      <p className="whitespace-pre-wrap leading-relaxed">{currentQuestion.passageText}</p>
+                    </div>
+                  ) : null}
+                  {currentQuestion.assertionText || currentQuestion.reasonText ? (
+                    <div className="mt-3 grid gap-2 text-sm">
+                      <div className="rounded-2xl border border-border bg-surface/70 p-3">
+                        <span className="font-semibold text-primary">Assertion: </span>
+                        {currentQuestion.assertionText}
+                      </div>
+                      <div className="rounded-2xl border border-border bg-surface/70 p-3">
+                        <span className="font-semibold text-primary">Reason: </span>
+                        {currentQuestion.reasonText}
+                      </div>
+                    </div>
+                  ) : null}
                   <h1 className="mt-3 text-balance text-3xl font-semibold sm:text-4xl">
                     {currentQuestion.questionText}
                   </h1>
@@ -591,18 +615,17 @@ export function QuizPlayer({ quizId }: { quizId: string }) {
               </div>
 
               {currentQuestion.imageUrl ? (
-                <div className="mt-6 overflow-hidden rounded-3xl border border-border bg-muted">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    alt=""
-                    className="max-h-80 w-full object-cover"
-                    src={currentQuestion.imageUrl}
-                  />
-                </div>
+                <ImageDisplay
+                  alt={currentQuestion.imageAlt || currentQuestion.questionText}
+                  caption={currentQuestion.imageCaption}
+                  className="mt-6"
+                  imageClassName="max-h-80"
+                  src={currentQuestion.imageUrl}
+                />
               ) : null}
 
               <div className="mt-7 grid gap-3">
-                {currentQuestion.type === "text" ? (
+                {currentQuestion.type === "text" || currentQuestion.type === "short-answer" ? (
                   <label className="grid gap-2">
                     <span className="text-sm font-semibold text-muted-foreground">
                       Your answer
@@ -614,6 +637,8 @@ export function QuizPlayer({ quizId }: { quizId: string }) {
                           ...answer,
                           selectedAnswer: "",
                           selectedAnswers: [],
+                          selectedOptionId: "",
+                          selectedOptionIds: [],
                           textAnswer: event.target.value
                         }))
                       }
@@ -621,6 +646,118 @@ export function QuizPlayer({ quizId }: { quizId: string }) {
                       value={currentAnswer.textAnswer}
                     />
                   </label>
+                ) : currentQuestion.type === "numeric" ? (
+                  <label className="grid gap-2">
+                    <span className="text-sm font-semibold text-muted-foreground">
+                      Numeric answer {currentQuestion.unit ? `(${currentQuestion.unit})` : ""}
+                    </span>
+                    <input
+                      className="min-h-12 rounded-2xl border border-border bg-surface px-4 text-base outline-none transition focus:border-primary"
+                      disabled={submitting}
+                      inputMode="decimal"
+                      onChange={(event) =>
+                        updateAnswer((answer) => ({
+                          ...answer,
+                          selectedAnswer: "",
+                          selectedAnswers: [],
+                          numericAnswer: event.target.value
+                        }))
+                      }
+                      placeholder="Enter a number"
+                      type="text"
+                      value={currentAnswer.numericAnswer ?? ""}
+                    />
+                  </label>
+                ) : currentQuestion.type === "fill-blank" ? (
+                  <div className="grid gap-3">
+                    {(currentQuestion.blanks ?? []).map((blank) => (
+                      <label className="grid gap-2" key={blank.id}>
+                        <span className="text-sm font-semibold text-muted-foreground">{blank.label}</span>
+                        <input
+                          className="min-h-12 rounded-2xl border border-border bg-surface px-4 text-base outline-none transition focus:border-primary"
+                          disabled={submitting}
+                          onChange={(event) =>
+                            updateAnswer((answer) => ({
+                              ...answer,
+                              blankAnswers: {
+                                ...(answer.blankAnswers ?? {}),
+                                [blank.id]: event.target.value
+                              }
+                            }))
+                          }
+                          placeholder="Type the missing word or phrase"
+                          type="text"
+                          value={currentAnswer.blankAnswers?.[blank.id] ?? ""}
+                        />
+                      </label>
+                    ))}
+                  </div>
+                ) : currentQuestion.type === "matching" ? (
+                  <div className="grid gap-3">
+                    {(currentQuestion.matchingLeftItems ?? []).map((left) => (
+                      <label className="grid gap-2 rounded-2xl border border-border bg-surface/70 p-3" key={left.id}>
+                        <span className="text-sm font-semibold">{left.text}</span>
+                        <select
+                          className="min-h-11 rounded-2xl border border-border bg-surface px-3 text-sm outline-none focus:border-primary"
+                          disabled={submitting}
+                          onChange={(event) =>
+                            updateAnswer((answer) => ({
+                              ...answer,
+                              matchingAnswers: {
+                                ...(answer.matchingAnswers ?? {}),
+                                [left.id]: event.target.value
+                              }
+                            }))
+                          }
+                          value={currentAnswer.matchingAnswers?.[left.id] ?? ""}
+                        >
+                          <option value="">Choose a match</option>
+                          {(currentQuestion.matchingRightItems ?? []).map((right) => (
+                            <option key={right.id} value={right.id}>{right.text}</option>
+                          ))}
+                        </select>
+                      </label>
+                    ))}
+                  </div>
+                ) : currentQuestion.type === "ordering" ? (
+                  <div className="grid gap-2">
+                    {(currentAnswer.orderingAnswerIds?.length ? currentAnswer.orderingAnswerIds : (currentQuestion.orderItems ?? []).map((item) => item.id)).map((id, index, ids) => {
+                      const item = (currentQuestion.orderItems ?? []).find((entry) => entry.id === id);
+                      return (
+                        <div className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-surface/70 p-3" key={id}>
+                          <span className="font-semibold">{index + 1}. {item?.text || id}</span>
+                          <span className="flex gap-2">
+                            <Button
+                              disabled={submitting || index === 0}
+                              onClick={() => updateAnswer((answer) => {
+                                const next = [...ids];
+                                [next[index - 1], next[index]] = [next[index], next[index - 1]];
+                                return { ...answer, orderingAnswerIds: next };
+                              })}
+                              size="sm"
+                              type="button"
+                              variant="secondary"
+                            >
+                              Up
+                            </Button>
+                            <Button
+                              disabled={submitting || index === ids.length - 1}
+                              onClick={() => updateAnswer((answer) => {
+                                const next = [...ids];
+                                [next[index + 1], next[index]] = [next[index], next[index + 1]];
+                                return { ...answer, orderingAnswerIds: next };
+                              })}
+                              size="sm"
+                              type="button"
+                              variant="secondary"
+                            >
+                              Down
+                            </Button>
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
                 ) : (
                   questionOptions.map((option) => {
                     const selected =
@@ -647,7 +784,9 @@ export function QuizPlayer({ quizId }: { quizId: string }) {
                               return {
                                 ...answer,
                                 selectedAnswer: "",
+                                selectedOptionId: "",
                                 selectedAnswers,
+                                selectedOptionIds: selectedAnswers,
                                 textAnswer: ""
                               };
                             });
@@ -657,18 +796,27 @@ export function QuizPlayer({ quizId }: { quizId: string }) {
                           updateAnswer((answer) => ({
                             ...answer,
                             selectedAnswer: option.id,
+                            selectedOptionId: option.id,
                             selectedAnswers: [],
+                            selectedOptionIds: [],
                             textAnswer: ""
                           }));
                         }}
                         type="button"
                       >
-                        <span>
-                          <span className="block text-base font-semibold">{option.text}</span>
+                        <span className="min-w-0 flex-1">
                           {option.imageUrl ? (
-                            <span className="mt-2 block text-xs text-muted-foreground">
-                              Includes visual reference
-                            </span>
+                            <ImageDisplay
+                              alt={option.imageAlt || option.text}
+                              className="mb-3 rounded-2xl"
+                              compact
+                              imageClassName="max-h-44"
+                              src={option.imageUrl}
+                            />
+                          ) : null}
+                          <span className="block text-base font-semibold">{option.text}</span>
+                          {option.imageUrl && option.imageAlt ? (
+                            <span className="mt-2 block text-xs text-muted-foreground">{option.imageAlt}</span>
                           ) : null}
                         </span>
                         <span
@@ -737,7 +885,7 @@ export function QuizPlayer({ quizId }: { quizId: string }) {
             </div>
             <div className="mt-5 grid grid-cols-5 gap-2 lg:grid-cols-4">
               {questions.map((question, index) => {
-                const answered = hasAnswer(playState.answers[question.id]);
+                const answered = hasAnswer(playState.answers[question.id], question);
                 const active = index === playState.currentIndex;
                 return (
                   <button

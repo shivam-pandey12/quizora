@@ -41,6 +41,7 @@ For local API-route token verification, configure Firebase Admin SDK using appli
 FIREBASE_SERVICE_ACCOUNT_JSON=
 FIREBASE_SERVICE_ACCOUNT_BASE64=
 FIREBASE_PROJECT_ID=
+FIREBASE_STORAGE_BUCKET=
 FIREBASE_CLIENT_EMAIL=
 FIREBASE_PRIVATE_KEY=
 ```
@@ -65,7 +66,7 @@ Never expose `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`, `ATTEMPT_SESSION_
 - Enable Google sign-in if Google login is used.
 - Add localhost and production domains to Auth authorized domains.
 - Enable Firestore Database.
-- Keep Storage available for future uploads if needed.
+- Enable Firebase Storage for quiz and question image uploads.
 - Verify the actual Firestore edition before go-live:
 
 ```bash
@@ -103,6 +104,7 @@ Review the files before deploying:
 ```bash
 firebase deploy --only firestore:rules
 firebase deploy --only firestore:indexes
+firebase deploy --only storage
 ```
 
 To deploy both together:

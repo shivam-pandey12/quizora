@@ -11,6 +11,7 @@ import { formatNumber, titleCase } from "@/lib/utils";
 export function QuizCard({ quiz, featured = false }: { quiz: QuizCardItem; featured?: boolean }) {
   const accent = quiz.accent ?? "from-amber-200 via-stone-100 to-sky-100";
   const highlighted = featured || quiz.isFeatured;
+  const coverImage = quiz.coverImageUrl || quiz.thumbnailUrl;
 
   return (
     <motion.article
@@ -20,9 +21,22 @@ export function QuizCard({ quiz, featured = false }: { quiz: QuizCardItem; featu
       transition={{ duration: 0.45, ease: "easeOut" }}
     >
       <Card className="group relative h-full overflow-hidden p-5 hover:-translate-y-1 hover:shadow-glow">
-        <div
-          className={`absolute inset-x-0 top-0 h-28 bg-gradient-to-br ${accent} opacity-80 dark:opacity-20`}
-        />
+        {coverImage ? (
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              alt={quiz.coverImageAlt || quiz.title}
+              className="absolute inset-x-0 top-0 h-32 w-full object-cover"
+              loading="lazy"
+              src={coverImage}
+            />
+            <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-black/25 via-black/5 to-surface" />
+          </>
+        ) : (
+          <div
+            className={`absolute inset-x-0 top-0 h-28 bg-gradient-to-br ${accent} opacity-80 dark:opacity-20`}
+          />
+        )}
         <div className="relative flex h-full flex-col">
           <div className="flex items-start justify-between gap-3">
             <Badge className="bg-white/80 text-primary dark:bg-white/10">
@@ -34,7 +48,7 @@ export function QuizCard({ quiz, featured = false }: { quiz: QuizCardItem; featu
               </span>
             ) : null}
           </div>
-          <h3 className="mt-8 text-2xl font-semibold">{quiz.title}</h3>
+          <h3 className={coverImage ? "mt-12 text-2xl font-semibold" : "mt-8 text-2xl font-semibold"}>{quiz.title}</h3>
           <p className="mt-3 line-clamp-3 text-sm leading-6 text-muted-foreground">
             {quiz.shortDescription || quiz.description}
           </p>

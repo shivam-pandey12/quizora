@@ -1,6 +1,13 @@
 import type { DocumentData, DocumentSnapshot, QueryDocumentSnapshot } from "firebase/firestore";
 import { toIso } from "@/lib/firestore/timestamps";
 import { normalizeBadges } from "@/lib/quiz/gamification";
+import {
+  normalizeBlanks,
+  normalizeMatchPairs,
+  normalizeOptions,
+  normalizeOrderItems,
+  normalizeQuestionType
+} from "@/lib/quiz/question-engine";
 import type {
   Attempt,
   Assignment,
@@ -79,6 +86,13 @@ function asReviewStatus(value: unknown) {
     : "none";
 }
 
+function flashQuestionTypesSafe(value: unknown) {
+  const type = normalizeQuestionType(value);
+  return type === "multiple-choice" || type === "true-false" || type === "short-answer" || type === "text"
+    ? type
+    : "single-choice";
+}
+
 function asBotDifficulty(value: unknown): BotDifficulty | null {
   return value === "easy" || value === "medium" || value === "hard" ? value : null;
 }
@@ -92,13 +106,7 @@ function asRecord(value: unknown): Record<string, unknown> {
 }
 
 function asOptions(value: unknown) {
-  return Array.isArray(value)
-    ? value.map((option: unknown) => ({
-        id: asString((option as { id?: unknown })?.id),
-        text: asString((option as { text?: unknown })?.text),
-        imageUrl: asString((option as { imageUrl?: unknown })?.imageUrl)
-      }))
-    : [];
+  return normalizeOptions(value, 0);
 }
 
 type FirestoreSnapshot = QueryDocumentSnapshot<DocumentData> | DocumentSnapshot<DocumentData>;
@@ -158,6 +166,10 @@ export function mapQuiz(snapshot: FirestoreSnapshot): Quiz {
     status,
     visibility,
     thumbnailUrl: asString(data.thumbnailUrl),
+    coverImageUrl: asString(data.coverImageUrl),
+    coverImagePath: asString(data.coverImagePath),
+    coverImageAlt: asString(data.coverImageAlt),
+    coverImageCaption: asString(data.coverImageCaption),
     tags: asStringArray(data.tags),
     estimatedMinutes: asNumber(data.estimatedMinutes, 5),
     questionCount: asNumber(data.questionCount),
@@ -218,30 +230,45 @@ export function mapCreatorRequest(snapshot: FirestoreSnapshot): CreatorRequest {
 
 export function mapQuestion(snapshot: FirestoreSnapshot): Question {
   const data = snapshot.data() ?? {};
-  const type =
-    data.type === "multiple-choice" ||
-    data.type === "true-false" ||
-    data.type === "text"
-      ? data.type
-      : "single-choice";
-  const rawOptions = Array.isArray(data.options) ? data.options : [];
+  const type = normalizeQuestionType(data.type);
 
   return {
     id: snapshot.id,
     quizId: asString(data.quizId),
     type,
     questionText: asString(data.questionText),
-    options: rawOptions
-      .map((option) => ({
-        id: asString(option?.id),
-        text: asString(option?.text),
-        imageUrl: asString(option?.imageUrl)
-      }))
-      .filter((option) => option.id && option.text),
+    options: asOptions(data.options),
     correctAnswer: asString(data.correctAnswer),
     correctAnswers: asStringArray(data.correctAnswers),
+    correctOptionId: asString(data.correctOptionId, asString(data.correctAnswer)),
+    correctOptionIds: asStringArray(data.correctOptionIds).length
+      ? asStringArray(data.correctOptionIds)
+      : asStringArray(data.correctAnswers),
+    correctText: asString(data.correctText, type === "short-answer" || type === "text" ? asString(data.correctAnswer) : ""),
+    acceptableAnswers: asStringArray(data.acceptableAnswers),
+    caseSensitive: asBoolean(data.caseSensitive),
+    trimWhitespace: asBoolean(data.trimWhitespace, true),
+    correctNumber: typeof data.correctNumber === "number" ? data.correctNumber : null,
+    tolerance: typeof data.tolerance === "number" ? data.tolerance : 0,
+    unit: asString(data.unit),
+    allowEquivalentUnits: asBoolean(data.allowEquivalentUnits),
+    blanks: normalizeBlanks(data.blanks),
+    blankScoring: "all-or-nothing",
+    matchPairs: normalizeMatchPairs(data.matchPairs),
+    shuffleRight: asBoolean(data.shuffleRight, true),
+    orderItems: normalizeOrderItems(data.orderItems),
+    correctOrderIds: asStringArray(data.correctOrderIds),
+    assertionText: asString(data.assertionText),
+    reasonText: asString(data.reasonText),
+    passageTitle: asString(data.passageTitle),
+    passageText: asString(data.passageText),
+    passageImageUrl: asString(data.passageImageUrl),
+    passageImageAlt: asString(data.passageImageAlt),
     explanation: asString(data.explanation),
     imageUrl: asString(data.imageUrl),
+    imagePath: asString(data.imagePath),
+    imageAlt: asString(data.imageAlt),
+    imageCaption: asString(data.imageCaption),
     points: asNumber(data.points, 10),
     timeLimitSeconds: asNumber(data.timeLimitSeconds),
     order: asNumber(data.order),
@@ -297,28 +324,43 @@ export function mapAttempt(snapshot: FirestoreSnapshot): Attempt {
     answers: rawAnswers.map((answer) => ({
       questionId: asString(answer?.questionId),
       questionTextSnapshot: asString(answer?.questionTextSnapshot),
-      type:
-        answer?.type === "multiple-choice" ||
-        answer?.type === "true-false" ||
-        answer?.type === "text"
-          ? answer.type
-          : "single-choice",
+      type: normalizeQuestionType(answer?.type),
       selectedAnswer: asString(answer?.selectedAnswer),
       selectedAnswers: asStringArray(answer?.selectedAnswers),
       correctAnswer: asString(answer?.correctAnswer),
       correctAnswers: asStringArray(answer?.correctAnswers),
+      selectedAnswerSummary: asString(answer?.selectedAnswerSummary),
+      correctAnswerSummary: asString(answer?.correctAnswerSummary),
+      textAnswer: asString(answer?.textAnswer),
+      numericAnswer: asString(answer?.numericAnswer),
+      blankAnswers: asRecord(answer?.blankAnswers) as Record<string, string>,
+      correctBlankAnswers: asRecord(answer?.correctBlankAnswers) as Record<string, string[]>,
+      matchingAnswers: asRecord(answer?.matchingAnswers) as Record<string, string>,
+      correctMatchingAnswers: asRecord(answer?.correctMatchingAnswers) as Record<string, string>,
+      orderingAnswerIds: asStringArray(answer?.orderingAnswerIds),
+      correctOrderIds: asStringArray(answer?.correctOrderIds),
+      skipped: asBoolean(answer?.skipped),
       isCorrect: asBoolean(answer?.isCorrect),
       pointsEarned: asNumber(answer?.pointsEarned),
       pointsPossible: asNumber(answer?.pointsPossible),
       timeSpentSeconds: asNumber(answer?.timeSpentSeconds),
       explanationSnapshot: asString(answer?.explanationSnapshot),
+      questionImageUrl: asString(answer?.questionImageUrl),
+      questionImageAlt: asString(answer?.questionImageAlt),
+      questionImageCaption: asString(answer?.questionImageCaption),
       optionsSnapshot: Array.isArray(answer?.optionsSnapshot)
-        ? answer.optionsSnapshot.map((option: unknown) => ({
-            id: asString((option as { id?: unknown })?.id),
-            text: asString((option as { text?: unknown })?.text),
-            imageUrl: asString((option as { imageUrl?: unknown })?.imageUrl)
-          }))
+        ? asOptions(answer.optionsSnapshot)
         : []
+      ,
+      blanksSnapshot: normalizeBlanks(answer?.blanksSnapshot),
+      matchPairsSnapshot: normalizeMatchPairs(answer?.matchPairsSnapshot),
+      orderItemsSnapshot: normalizeOrderItems(answer?.orderItemsSnapshot),
+      unit: asString(answer?.unit),
+      tolerance: typeof answer?.tolerance === "number" ? answer.tolerance : null,
+      passageTitle: asString(answer?.passageTitle),
+      passageText: asString(answer?.passageText),
+      assertionText: asString(answer?.assertionText),
+      reasonText: asString(answer?.reasonText)
     })),
     xpEarned: asNumber(data.xpEarned),
     levelBefore: asNumber(data.levelBefore, 1),
@@ -687,12 +729,7 @@ export function mapRoomPlayer(snapshot: FirestoreSnapshot): RoomPlayer {
 
 export function mapRoomAnswer(snapshot: FirestoreSnapshot): RoomAnswer {
   const data = snapshot.data() ?? {};
-  const type =
-    data.type === "multiple-choice" ||
-    data.type === "true-false" ||
-    data.type === "text"
-      ? data.type
-      : "single-choice";
+  const type = normalizeQuestionType(data.type);
 
   return {
     id: snapshot.id,
@@ -708,12 +745,35 @@ export function mapRoomAnswer(snapshot: FirestoreSnapshot): RoomAnswer {
     selectedAnswers: asStringArray(data.selectedAnswers),
     correctAnswer: asString(data.correctAnswer),
     correctAnswers: asStringArray(data.correctAnswers),
+    selectedAnswerSummary: asString(data.selectedAnswerSummary),
+    correctAnswerSummary: asString(data.correctAnswerSummary),
+    textAnswer: asString(data.textAnswer),
+    numericAnswer: asString(data.numericAnswer),
+    blankAnswers: asRecord(data.blankAnswers) as Record<string, string>,
+    correctBlankAnswers: asRecord(data.correctBlankAnswers) as Record<string, string[]>,
+    matchingAnswers: asRecord(data.matchingAnswers) as Record<string, string>,
+    correctMatchingAnswers: asRecord(data.correctMatchingAnswers) as Record<string, string>,
+    orderingAnswerIds: asStringArray(data.orderingAnswerIds),
+    correctOrderIds: asStringArray(data.correctOrderIds),
+    skipped: asBoolean(data.skipped),
     isCorrect: asBoolean(data.isCorrect),
     pointsEarned: asNumber(data.pointsEarned),
     pointsPossible: asNumber(data.pointsPossible),
     timeTakenSeconds: asNumber(data.timeTakenSeconds),
     explanationSnapshot: asString(data.explanationSnapshot),
+    questionImageUrl: asString(data.questionImageUrl),
+    questionImageAlt: asString(data.questionImageAlt),
+    questionImageCaption: asString(data.questionImageCaption),
     optionsSnapshot: asOptions(data.optionsSnapshot),
+    blanksSnapshot: normalizeBlanks(data.blanksSnapshot),
+    matchPairsSnapshot: normalizeMatchPairs(data.matchPairsSnapshot),
+    orderItemsSnapshot: normalizeOrderItems(data.orderItemsSnapshot),
+    unit: asString(data.unit),
+    tolerance: typeof data.tolerance === "number" ? data.tolerance : null,
+    passageTitle: asString(data.passageTitle),
+    passageText: asString(data.passageText),
+    assertionText: asString(data.assertionText),
+    reasonText: asString(data.reasonText),
     trusted: asBoolean(data.trusted),
     scoringSource: asScoringSource(data.scoringSource),
     securityFlags: asSecurityFlags(data.securityFlags),
@@ -824,10 +884,7 @@ export function mapFlashQuiz(snapshot: FirestoreSnapshot): FlashQuiz {
 
 export function mapFlashQuestion(snapshot: FirestoreSnapshot): FlashQuestion {
   const data = snapshot.data() ?? {};
-  const type =
-    data.type === "multiple-choice" || data.type === "true-false" || data.type === "text"
-      ? data.type
-      : "single-choice";
+  const type = flashQuestionTypesSafe(data.type);
   return {
     id: snapshot.id,
     flashQuizId: asString(data.flashQuizId),
@@ -836,7 +893,19 @@ export function mapFlashQuestion(snapshot: FirestoreSnapshot): FlashQuestion {
     options: asOptions(data.options).filter((option) => option.id && option.text),
     correctAnswer: asString(data.correctAnswer),
     correctAnswers: asStringArray(data.correctAnswers),
+    correctOptionId: asString(data.correctOptionId, asString(data.correctAnswer)),
+    correctOptionIds: asStringArray(data.correctOptionIds).length
+      ? asStringArray(data.correctOptionIds)
+      : asStringArray(data.correctAnswers),
+    correctText: asString(data.correctText, type === "short-answer" || type === "text" ? asString(data.correctAnswer) : ""),
+    acceptableAnswers: asStringArray(data.acceptableAnswers),
+    caseSensitive: asBoolean(data.caseSensitive),
+    trimWhitespace: asBoolean(data.trimWhitespace, true),
     explanation: asString(data.explanation),
+    imageUrl: asString(data.imageUrl),
+    imagePath: asString(data.imagePath),
+    imageAlt: asString(data.imageAlt),
+    imageCaption: asString(data.imageCaption),
     points: asNumber(data.points, 1),
     timeLimitSeconds: asNumber(data.timeLimitSeconds, 30),
     order: asNumber(data.order),
@@ -894,6 +963,7 @@ export function mapFlashAnswer(snapshot: FirestoreSnapshot): FlashAnswer {
     questionIndex: asNumber(data.questionIndex),
     selectedAnswer: asString(data.selectedAnswer),
     selectedAnswers: asStringArray(data.selectedAnswers),
+    textAnswer: asString(data.textAnswer),
     isCorrect: asBoolean(data.isCorrect),
     pointsEarned: asNumber(data.pointsEarned),
     pointsPossible: asNumber(data.pointsPossible),

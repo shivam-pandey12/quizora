@@ -168,10 +168,12 @@ export const docPages: DocPage[] = [
         id: "question-types",
         heading: "Question types and explanations",
         body: [
-          "Most quizzes use single-choice questions. Some quizzes may include true-false or multiple-choice questions when the play engine supports them safely.",
+          "Quizora supports auto-scored single-choice, multiple-choice, true-false, short-answer, numeric, fill-blank, matching, ordering, assertion-reason, and passage-context questions.",
+          "Multiple-choice uses exact-set scoring in this version. Numeric units are displayed for clarity, but unit conversion is not applied. Passage content is context on a question, not a nested section system.",
           "Explanations are shown after a saved result so you can review what went right and what needs practice."
         ],
         tips: [
+          "Creators can use 2 to 8 options; admins can use up to 10 when a question type needs more choices.",
           "Read explanations even when you answer correctly. They often explain why the other options are not right.",
           "Report a question if it seems ambiguous, outdated, or incorrect."
         ]
@@ -725,6 +727,22 @@ export const docPages: DocPage[] = [
       {
         question: "Can I create quizzes?",
         answer: "Yes. Any signed-in user can create temporary Flash Quizzes by code or link. Permanent public quizzes still require approved creator or admin review."
+      },
+      {
+        question: "Can I create more than MCQ questions?",
+        answer: "Yes. Permanent quiz editors support single-choice, multiple-choice, true-false, short-answer, numeric, fill-blank, matching, ordering, assertion-reason, and passage-context questions."
+      },
+      {
+        question: "Can I add 2, 3, 5, or 6 answer options?",
+        answer: "Yes. Option-based questions support a flexible option count. Creators can use up to 8 options, and admins can use up to 10."
+      },
+      {
+        question: "Can questions have multiple correct answers?",
+        answer: "Yes. Multiple-choice questions can have several correct option IDs. Quizora scores them by exact set match in this version."
+      },
+      {
+        question: "Are short answers auto-graded?",
+        answer: "Yes, short-answer questions are auto-graded by normalized exact match against accepted answers. Long-answer, subjective, and AI grading are not supported in this phase."
       },
       {
         question: "Why can creators not publish directly?",

@@ -1,0 +1,60 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function userPath(uid) {
+      return /databases/(default)/documents/users/$(uid);
+    }
+
+    function quizPath(quizId) {
+      return /databases/(default)/documents/quizzes/$(quizId);
+    }
+
+    function isAdmin() {
+      return signedIn()
+        && firestore.exists(userPath(request.auth.uid))
+        && firestore.get(userPath(request.auth.uid)).data.role == 'admin';
+    }
+
+    function quizExists(quizId) {
+      return firestore.exists(quizPath(quizId));
+    }
+
+    function isQuizOwner(quizId) {
+      return signedIn()
+        && quizExists(quizId)
+        && firestore.get(quizPath(quizId)).data.ownerId == request.auth.uid;
+    }
+
+    function isPublicApprovedQuiz(quizId) {
+      return quizExists(quizId)
+        && firestore.get(quizPath(quizId)).data.status == 'published'
+        && firestore.get(quizPath(quizId)).data.visibility == 'public'
+        && (
+          !firestore.get(quizPath(quizId)).data.keys().hasAny(['publishScope'])
+          || firestore.get(quizPath(quizId)).data.publishScope == 'global'
+        )
+        && (
+          !firestore.get(quizPath(quizId)).data.keys().hasAny(['ownerType'])
+          || firestore.get(quizPath(quizId)).data.ownerType == 'admin'
+          || (
+            firestore.get(quizPath(quizId)).data.ownerType == 'creator'
+            && firestore.get(quizPath(quizId)).data.reviewStatus == 'approved'
+          )
+        );
+    }
+
+    match /quizora/quizzes/{quizId}/{imagePath=**} {
+      allow read: if isPublicApprovedQuiz(quizId) || isAdmin() || isQuizOwner(quizId);
+      allow write: if false;
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

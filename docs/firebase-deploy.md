@@ -6,6 +6,7 @@ Quizora uses `firebase.json` for Firestore deployment:
 - documented location: `asia-south2`
 - rules: `firestore.rules`
 - indexes: `firestore.indexes.json`
+- Storage rules: `storage.rules`
 
 Quizora is also prepared for Firebase App Hosting:
 
@@ -32,6 +33,7 @@ npx -y firebase-tools@latest firestore:databases:get "(default)" --project quizo
 ```bash
 firebase deploy --only firestore:rules
 firebase deploy --only firestore:indexes
+firebase deploy --only storage
 ```
 
 Or deploy both:
@@ -39,6 +41,8 @@ Or deploy both:
 ```bash
 firebase deploy --only firestore
 ```
+
+Storage image uploads are performed by trusted Next.js API routes with Firebase Admin SDK. Deploy `storage.rules` before enabling production image uploads so direct client writes remain blocked.
 
 ## Deploy The Next.js App
 
