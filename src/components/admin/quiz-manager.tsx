@@ -38,6 +38,7 @@ import {
 import { createSlug } from "@/lib/firestore/slug";
 import { formatDate } from "@/lib/firestore/timestamps";
 import { validateQuizInput } from "@/lib/firestore/validation";
+import { uploadImage } from "@/lib/uploads/images";
 import { titleCase } from "@/lib/utils";
 import type { Category, Quiz, QuizDifficulty, QuizInput, QuizStatus } from "@/types/domain";
 
@@ -91,6 +92,7 @@ export function QuizManager() {
   const [form, setForm] = useState<QuizInput>(() => getEmptyQuiz(user?.uid));
   const [tagsValue, setTagsValue] = useState("");
   const [editing, setEditing] = useState<Quiz | null>(null);
+  const [pendingCoverFile, setPendingCoverFile] = useState<File | null>(null);
   const [slugTouched, setSlugTouched] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [archiveTarget, setArchiveTarget] = useState<Quiz | null>(null);
@@ -203,12 +205,14 @@ export function QuizManager() {
     setForm(getEmptyQuiz(user?.uid));
     setTagsValue("");
     setEditing(null);
+    setPendingCoverFile(null);
     setSlugTouched(false);
     setFieldErrors({});
   }
 
   function editQuiz(quiz: Quiz) {
     setEditing(quiz);
+    setPendingCoverFile(null);
     setSlugTouched(true);
     setFieldErrors({});
     setTagsValue(quiz.tags.join(", "));
@@ -267,13 +271,32 @@ export function QuizManager() {
 
     setSaving(true);
     try {
+      let savedId = editing?.id ?? "";
+      let imageWarning = "";
       if (editing) {
         await updateQuiz(editing.id, normalized);
-        showToast({ tone: "success", title: "Quiz updated" });
       } else {
-        await createQuiz(normalized);
-        showToast({ tone: "success", title: "Quiz draft created" });
+        savedId = await createQuiz(normalized);
       }
+      if (pendingCoverFile && user && savedId) {
+        try {
+          await uploadImage({
+            user,
+            file: pendingCoverFile,
+            target: { kind: "quiz-cover", quizId: savedId },
+            alt: normalized.coverImageAlt ?? "",
+            caption: normalized.coverImageCaption ?? ""
+          });
+          setPendingCoverFile(null);
+        } catch (caught) {
+          imageWarning = caught instanceof Error ? caught.message : "Cover image upload failed.";
+        }
+      }
+      showToast({
+        tone: imageWarning ? "info" : "success",
+        title: editing ? "Quiz updated" : "Quiz draft created",
+        description: imageWarning ? `Quiz saved, but cover upload failed: ${imageWarning}` : undefined
+      });
       resetForm();
       await loadData();
     } catch (caught) {
@@ -444,7 +467,6 @@ export function QuizManager() {
               caption
               description="Used on quiz cards, quiz detail, featured sections, and social previews."
               disabled={saving}
-              disabledReason={!editing ? "Save the quiz draft first, then upload a cover image." : undefined}
               metadata={{
                 imageUrl: form.coverImageUrl || form.thumbnailUrl || "",
                 imagePath: form.coverImagePath ?? "",
@@ -463,8 +485,10 @@ export function QuizManager() {
                     : current.thumbnailUrl === current.coverImageUrl
                       ? ""
                       : current.thumbnailUrl
-                }))
-              }
+                  }))
+                }
+              onPendingFileChange={!editing ? setPendingCoverFile : undefined}
+              pendingFile={pendingCoverFile}
               target={editing ? { kind: "quiz-cover", quizId: editing.id } : undefined}
               title="Quiz cover image"
             />

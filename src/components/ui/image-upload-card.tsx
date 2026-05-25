@@ -1,7 +1,7 @@
 "use client";
 
 import { ImagePlus, Loader2, Trash2, UploadCloud } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { FieldError } from "@/components/ui/field-error";
 import { ImageDisplay } from "@/components/ui/image-display";
@@ -30,6 +30,8 @@ export function ImageUploadCard({
   metadata,
   onChange,
   target,
+  pendingFile,
+  onPendingFileChange,
   disabled,
   disabledReason,
   caption = false,
@@ -40,6 +42,8 @@ export function ImageUploadCard({
   metadata: EditableImageMetadata;
   onChange: (metadata: EditableImageMetadata) => void;
   target?: ImageUploadTarget;
+  pendingFile?: File | null;
+  onPendingFileChange?: (file: File | null) => void;
   disabled?: boolean;
   disabledReason?: string;
   caption?: boolean;
@@ -50,16 +54,37 @@ export function ImageUploadCard({
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState("");
-  const hasImage = Boolean(metadata.imageUrl);
-  const blocked = disabled || !target || !user || working;
+  const [pendingPreviewUrl, setPendingPreviewUrl] = useState("");
+  const hasPendingMode = Boolean(onPendingFileChange);
+  const hasImage = Boolean(metadata.imageUrl || pendingPreviewUrl);
+  const blocked = disabled || !user || working || (!target && !hasPendingMode);
+
+  useEffect(() => {
+    if (!pendingFile) {
+      setPendingPreviewUrl("");
+      return;
+    }
+
+    const nextUrl = URL.createObjectURL(pendingFile);
+    setPendingPreviewUrl(nextUrl);
+    return () => URL.revokeObjectURL(nextUrl);
+  }, [pendingFile]);
 
   async function upload(file: File | undefined) {
-    if (!file || !target || !user) return;
+    if (!file || !user) return;
     const validation = validateImageFile(file);
     if (validation) {
       setError(validation);
       return;
     }
+    if (!target && onPendingFileChange) {
+      setError("");
+      onPendingFileChange(file);
+      if (inputRef.current) inputRef.current.value = "";
+      showToast({ tone: "success", title: "Image ready", description: "It will upload automatically after you save." });
+      return;
+    }
+    if (!target) return;
     setWorking(true);
     setError("");
     try {
@@ -88,6 +113,11 @@ export function ImageUploadCard({
   }
 
   async function remove() {
+    if (!metadata.imagePath && pendingFile && onPendingFileChange) {
+      onPendingFileChange(null);
+      if (!metadata.imageUrl) onChange({ imageUrl: "", imagePath: "", imageAlt: "", imageCaption: "" });
+      return;
+    }
     if (!target || !user || !metadata.imagePath) {
       onChange({ imageUrl: "", imagePath: "", imageAlt: "", imageCaption: "" });
       return;
@@ -141,7 +171,7 @@ export function ImageUploadCard({
             type="button"
             variant="secondary"
           >
-            {hasImage ? "Replace" : "Upload"}
+            {!target && hasPendingMode ? (hasImage ? "Replace" : "Choose") : hasImage ? "Replace" : "Upload"}
           </Button>
           {hasImage ? (
             <Button
@@ -158,20 +188,20 @@ export function ImageUploadCard({
         </div>
       </div>
 
-      {disabledReason || (!target && !disabledReason) ? (
+      {disabledReason || (!target && !disabledReason && !hasPendingMode) || (!target && hasPendingMode && pendingFile) ? (
         <div className="mt-3 rounded-2xl border border-primary/20 bg-primary/8 px-3 py-2 text-xs text-muted-foreground">
-          {disabledReason || "Save this item first, then upload an image."}
+          {disabledReason || (!target && hasPendingMode && pendingFile ? "Image selected. It will upload automatically after you save." : "Save this item first, then upload an image.")}
         </div>
       ) : null}
 
       {hasImage ? (
         <ImageDisplay
-          alt={metadata.imageAlt}
+          alt={metadata.imageAlt || pendingFile?.name || title}
           caption={metadata.imageCaption}
           className="mt-4"
           compact={compact}
           imageClassName={compact ? "max-h-44" : "max-h-72"}
-          src={metadata.imageUrl}
+          src={metadata.imageUrl || pendingPreviewUrl}
         />
       ) : null}
 

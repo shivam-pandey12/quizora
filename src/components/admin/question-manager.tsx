@@ -14,6 +14,7 @@ import { Select } from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast-provider";
+import { useAuth } from "@/lib/auth/auth-provider";
 import { firebaseSetupMessage, isFirebaseConfigured } from "@/lib/firebase/client";
 import {
   createQuestion,
@@ -34,6 +35,7 @@ import {
   permanentQuestionTypes,
   trueFalseOptions
 } from "@/lib/quiz/question-engine";
+import { uploadImage } from "@/lib/uploads/images";
 import { formatSeconds, titleCase } from "@/lib/utils";
 import type { Question, QuestionInput, QuestionOption, QuestionType, Quiz } from "@/types/domain";
 
@@ -48,6 +50,7 @@ function emptyQuestion(quizId: string, order: number): QuestionInput {
 }
 
 export function QuestionManager({ quizId }: { quizId: string }) {
+  const { user } = useAuth();
   const { showToast } = useToast();
   const [quiz, setQuiz] = useState<Quiz | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -56,6 +59,8 @@ export function QuestionManager({ quizId }: { quizId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState<QuestionInput>(() => emptyQuestion(quizId, 1));
   const [editing, setEditing] = useState<Question | null>(null);
+  const [pendingQuestionFile, setPendingQuestionFile] = useState<File | null>(null);
+  const [pendingOptionFiles, setPendingOptionFiles] = useState<Record<string, File | null>>({});
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [deleteTarget, setDeleteTarget] = useState<Question | null>(null);
 
@@ -94,6 +99,8 @@ export function QuestionManager({ quizId }: { quizId: string }) {
 
   function resetForm() {
     setEditing(null);
+    setPendingQuestionFile(null);
+    setPendingOptionFiles({});
     setFieldErrors({});
     setForm(emptyQuestion(quizId, questions.length + 1));
   }
@@ -136,6 +143,8 @@ export function QuestionManager({ quizId }: { quizId: string }) {
 
   function editQuestion(question: Question) {
     setEditing(question);
+    setPendingQuestionFile(null);
+    setPendingOptionFiles({});
     setFieldErrors({});
     setForm({
       quizId: question.quizId,
@@ -240,8 +249,42 @@ export function QuestionManager({ quizId }: { quizId: string }) {
         await updateQuestion(editing.id, normalized);
         showToast({ tone: "success", title: "Question updated" });
       } else {
-        await createQuestion(normalized);
-        showToast({ tone: "success", title: "Question created" });
+        const questionId = await createQuestion(normalized);
+        let imageWarning = "";
+        if (pendingQuestionFile && user) {
+          try {
+            await uploadImage({
+              user,
+              file: pendingQuestionFile,
+              target: { kind: "question-image", quizId, questionId },
+              alt: normalized.imageAlt ?? "",
+              caption: normalized.imageCaption ?? ""
+            });
+          } catch (caught) {
+            imageWarning = caught instanceof Error ? caught.message : "Question image upload failed.";
+          }
+        }
+        const optionUploads = Object.entries(pendingOptionFiles).filter(
+          (entry): entry is [string, File] => Boolean(entry[1]) && normalized.options.some((option) => option.id === entry[0])
+        );
+        for (const [optionId, file] of optionUploads) {
+          if (!user) break;
+          try {
+            await uploadImage({
+              user,
+              file,
+              target: { kind: "option-image", quizId, questionId, optionId },
+              alt: normalized.options.find((option) => option.id === optionId)?.imageAlt ?? ""
+            });
+          } catch (caught) {
+            imageWarning = caught instanceof Error ? caught.message : "One option image upload failed.";
+          }
+        }
+        showToast({
+          tone: imageWarning ? "info" : "success",
+          title: "Question created",
+          description: imageWarning ? `Question saved, but an image upload failed: ${imageWarning}` : undefined
+        });
       }
       resetForm();
       await loadData();
@@ -420,7 +463,6 @@ export function QuestionManager({ quizId }: { quizId: string }) {
             caption
             description="Optional diagram, map, graph, or visual prompt for this question."
             disabled={saving}
-            disabledReason={!editing ? "Save the question first, then upload a question image." : undefined}
             metadata={{
               imageUrl: form.imageUrl,
               imagePath: form.imagePath ?? "",
@@ -436,6 +478,8 @@ export function QuestionManager({ quizId }: { quizId: string }) {
                 imageCaption: metadata.imageCaption ?? ""
               }))
             }
+            onPendingFileChange={!editing ? setPendingQuestionFile : undefined}
+            pendingFile={pendingQuestionFile}
             target={editing ? { kind: "question-image", quizId, questionId: editing.id } : undefined}
             title="Question image"
           />
@@ -521,7 +565,6 @@ export function QuestionManager({ quizId }: { quizId: string }) {
                       compact
                       description="Optional visual answer option."
                       disabled={saving}
-                      disabledReason={!editing ? "Save the question first, then upload option images." : undefined}
                       metadata={{
                         imageUrl: item.imageUrl ?? "",
                         imagePath: item.imagePath ?? "",
@@ -534,6 +577,8 @@ export function QuestionManager({ quizId }: { quizId: string }) {
                           imageAlt: metadata.imageAlt
                         })
                       }
+                      onPendingFileChange={!editing ? (file) => setPendingOptionFiles((current) => ({ ...current, [item.id]: file })) : undefined}
+                      pendingFile={pendingOptionFiles[item.id] ?? null}
                       target={
                         editing
                           ? {

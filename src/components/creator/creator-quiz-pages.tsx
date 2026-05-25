@@ -72,6 +72,7 @@ import {
   trueFalseOptions,
   validateQuestionByType
 } from "@/lib/quiz/question-engine";
+import { uploadImage } from "@/lib/uploads/images";
 import { titleCase } from "@/lib/utils";
 import type {
   Category,
@@ -523,6 +524,7 @@ export function CreatorQuizFormPage({ quizId }: { quizId?: string }) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [quiz, setQuiz] = useState<Quiz | null>(null);
   const [form, setForm] = useState<QuizFormState | null>(null);
+  const [pendingCoverFile, setPendingCoverFile] = useState<File | null>(null);
   const [slugTouched, setSlugTouched] = useState(Boolean(quizId));
   const [loading, setLoading] = useState(Boolean(quizId));
   const [saving, setSaving] = useState(false);
@@ -534,6 +536,7 @@ export function CreatorQuizFormPage({ quizId }: { quizId?: string }) {
     async function load() {
       const nextCategories = await listPublicCategories();
       setCategories(nextCategories);
+      setPendingCoverFile(null);
       if (quizId) {
         const nextQuiz = await getCreatorQuiz(quizId);
         setQuiz(nextQuiz);
@@ -636,7 +639,26 @@ export function CreatorQuizFormPage({ quizId }: { quizId?: string }) {
       });
       const savedId = quizId ? quizId : await createCreatorQuizDraft(input);
       if (quizId) await updateCreatorQuizDraft(quizId, input);
-      showToast({ tone: "success", title: quizId ? "Quiz updated" : "Quiz draft created", description: "Now add questions and preview the result." });
+      let imageWarning = "";
+      if (pendingCoverFile) {
+        try {
+          await uploadImage({
+            user,
+            file: pendingCoverFile,
+            target: { kind: "quiz-cover", quizId: savedId },
+            alt: form.coverImageAlt ?? "",
+            caption: form.coverImageCaption ?? ""
+          });
+          setPendingCoverFile(null);
+        } catch (caught) {
+          imageWarning = caught instanceof Error ? caught.message : "Cover image upload failed.";
+        }
+      }
+      showToast({
+        tone: imageWarning ? "info" : "success",
+        title: quizId ? "Quiz updated" : "Quiz draft created",
+        description: imageWarning ? `Draft saved, but cover upload failed: ${imageWarning}` : "Now add questions and preview the result."
+      });
       router.push(`/creator/quizzes/${savedId}/questions`);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not save this quiz.");
@@ -660,13 +682,13 @@ export function CreatorQuizFormPage({ quizId }: { quizId?: string }) {
             caption
             description="Used on cards and previews after an admin approves the quiz for public publishing."
             disabled={saving}
-            disabledReason={!quizId ? "Create the quiz draft first, then upload a cover image." : undefined}
             metadata={{
               imageUrl: form.coverImageUrl || form.thumbnailUrl || "",
               imagePath: form.coverImagePath ?? "",
               imageAlt: form.coverImageAlt ?? "",
               imageCaption: form.coverImageCaption ?? ""
             }}
+            onPendingFileChange={!quizId ? setPendingCoverFile : undefined}
             onChange={(metadata) =>
               setForm((current) =>
                 current
@@ -685,6 +707,7 @@ export function CreatorQuizFormPage({ quizId }: { quizId?: string }) {
                   : current
               )
             }
+            pendingFile={pendingCoverFile}
             target={quizId ? { kind: "quiz-cover", quizId } : undefined}
             title="Quiz cover image"
           />
@@ -718,6 +741,8 @@ export function CreatorQuizQuestionsPage({ quizId }: { quizId: string }) {
   const [quiz, setQuiz] = useState<Quiz | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [form, setForm] = useState<QuestionInput>(() => questionBlank(quizId, 1));
+  const [pendingQuestionFile, setPendingQuestionFile] = useState<File | null>(null);
+  const [pendingOptionFiles, setPendingOptionFiles] = useState<Record<string, File | null>>({});
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Question | null>(null);
   const [loading, setLoading] = useState(true);
@@ -730,6 +755,8 @@ export function CreatorQuizQuestionsPage({ quizId }: { quizId: string }) {
     setQuestions(nextQuestions);
     setForm(questionBlank(quizId, nextQuestions.length + 1));
     setEditingId(null);
+    setPendingQuestionFile(null);
+    setPendingOptionFiles({});
     setLoading(false);
   }, [quizId]);
   useEffect(() => {
@@ -785,8 +812,42 @@ export function CreatorQuizQuestionsPage({ quizId }: { quizId: string }) {
         await updateCreatorQuestion(editingId, form);
         showToast({ tone: "success", title: "Question updated" });
       } else {
-        await createCreatorQuestion(form);
-        showToast({ tone: "success", title: "Question added" });
+        const questionId = await createCreatorQuestion(form);
+        let imageWarning = "";
+        if (pendingQuestionFile && user) {
+          try {
+            await uploadImage({
+              user,
+              file: pendingQuestionFile,
+              target: { kind: "question-image", quizId, questionId },
+              alt: form.imageAlt ?? "",
+              caption: form.imageCaption ?? ""
+            });
+          } catch (caught) {
+            imageWarning = caught instanceof Error ? caught.message : "Question image upload failed.";
+          }
+        }
+        const optionUploads = Object.entries(pendingOptionFiles).filter(
+          (entry): entry is [string, File] => Boolean(entry[1]) && form.options.some((option) => option.id === entry[0])
+        );
+        for (const [optionId, file] of optionUploads) {
+          if (!user) break;
+          try {
+            await uploadImage({
+              user,
+              file,
+              target: { kind: "option-image", quizId, questionId, optionId },
+              alt: form.options.find((option) => option.id === optionId)?.imageAlt ?? ""
+            });
+          } catch (caught) {
+            imageWarning = caught instanceof Error ? caught.message : "One option image upload failed.";
+          }
+        }
+        showToast({
+          tone: imageWarning ? "info" : "success",
+          title: "Question added",
+          description: imageWarning ? `Question saved, but an image upload failed: ${imageWarning}` : undefined
+        });
       }
       await load();
     } catch (caught) {
@@ -838,7 +899,7 @@ export function CreatorQuizQuestionsPage({ quizId }: { quizId: string }) {
                 ) : null}
                 <p className="mt-2 text-sm text-muted-foreground">{question.explanation}</p>
                 <div className="mt-4 flex flex-wrap gap-2">
-                  <Button size="sm" variant="secondary" onClick={() => { setEditingId(question.id); setForm(questionToInput(question)); }} icon={<Pencil className="size-4" />}>Edit</Button>
+                  <Button size="sm" variant="secondary" onClick={() => { setEditingId(question.id); setPendingQuestionFile(null); setPendingOptionFiles({}); setForm(questionToInput(question)); }} icon={<Pencil className="size-4" />}>Edit</Button>
                   <Button size="sm" variant="danger" onClick={() => setDeleteTarget(question)} icon={<Trash2 className="size-4" />}>Delete</Button>
                 </div>
               </div>
@@ -855,13 +916,13 @@ export function CreatorQuizQuestionsPage({ quizId }: { quizId: string }) {
               compact
               description="Optional visual prompt for maps, diagrams, charts, or image-identification questions."
               disabled={saving}
-              disabledReason={!editingId ? "Save the question first, then upload a question image." : undefined}
               metadata={{
                 imageUrl: form.imageUrl,
                 imagePath: form.imagePath ?? "",
                 imageAlt: form.imageAlt ?? "",
                 imageCaption: form.imageCaption ?? ""
               }}
+              onPendingFileChange={!editingId ? setPendingQuestionFile : undefined}
               onChange={(metadata) =>
                 setForm((current) => ({
                   ...current,
@@ -871,6 +932,7 @@ export function CreatorQuizQuestionsPage({ quizId }: { quizId: string }) {
                   imageCaption: metadata.imageCaption ?? ""
                 }))
               }
+              pendingFile={pendingQuestionFile}
               target={editingId ? { kind: "question-image", quizId, questionId: editingId } : undefined}
               title="Question image"
             />
@@ -961,12 +1023,12 @@ export function CreatorQuizQuestionsPage({ quizId }: { quizId: string }) {
                   compact
                   description="Optional visual answer option."
                   disabled={saving}
-                  disabledReason={!editingId ? "Save the question first, then upload option images." : undefined}
                   metadata={{
                     imageUrl: option.imageUrl ?? "",
                     imagePath: option.imagePath ?? "",
                     imageAlt: option.imageAlt ?? ""
                   }}
+                  onPendingFileChange={!editingId ? (file) => setPendingOptionFiles((current) => ({ ...current, [option.id]: file })) : undefined}
                   onChange={(metadata) =>
                     setOption(index, {
                       ...option,
@@ -975,6 +1037,7 @@ export function CreatorQuizQuestionsPage({ quizId }: { quizId: string }) {
                       imageAlt: metadata.imageAlt
                     })
                   }
+                  pendingFile={pendingOptionFiles[option.id] ?? null}
                   target={
                     editingId
                       ? { kind: "option-image", quizId, questionId: editingId, optionId: option.id }
@@ -1049,7 +1112,7 @@ export function CreatorQuizQuestionsPage({ quizId }: { quizId: string }) {
             </label>
             <FieldError message={error ?? undefined} />
             <Button disabled={saving} type="submit" icon={saving ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}>{editingId ? "Save question" : "Add question"}</Button>
-            {editingId ? <Button variant="secondary" onClick={() => { setEditingId(null); setForm(questionBlank(quizId, questions.length + 1)); }}>Cancel edit</Button> : null}
+            {editingId ? <Button variant="secondary" onClick={() => { setEditingId(null); setPendingQuestionFile(null); setPendingOptionFiles({}); setForm(questionBlank(quizId, questions.length + 1)); }}>Cancel edit</Button> : null}
           </form>
         </Card>
       </div>
