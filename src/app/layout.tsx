@@ -1,9 +1,13 @@
 import type { Metadata, Viewport } from "next";
+import Script from "next/script";
 import { AppProviders } from "@/components/providers/app-providers";
 import { Footer } from "@/components/site/footer";
 import { Navbar } from "@/components/site/navbar";
 import { buildCanonicalUrl, defaultDescription, defaultOgImage, defaultTitle, getBaseUrl, siteName } from "@/lib/seo";
 import "./globals.css";
+
+const googleAnalyticsId =
+  process.env.NEXT_PUBLIC_GOOGLE_ANALYTICS_ID || process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID;
 
 export const metadata: Metadata = {
   metadataBase: new URL(getBaseUrl()),
@@ -56,6 +60,23 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body>
+        {googleAnalyticsId ? (
+          <>
+            <Script
+              async
+              src={`https://www.googletagmanager.com/gtag/js?id=${googleAnalyticsId}`}
+              strategy="afterInteractive"
+            />
+            <Script id="google-analytics" strategy="afterInteractive">
+              {`
+                window.dataLayer = window.dataLayer || [];
+                function gtag(){window.dataLayer.push(arguments);}
+                gtag('js', new Date());
+                gtag('config', '${googleAnalyticsId}');
+              `}
+            </Script>
+          </>
+        ) : null}
         <AppProviders>
           <div className="flex min-h-screen flex-col">
             <Navbar />
