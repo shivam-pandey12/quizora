@@ -347,7 +347,7 @@ export function Navbar() {
   return (
     <header className="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur-xl">
       <div className="container-page flex h-[4.5rem] items-center justify-between gap-4 py-4">
-        <BrandLogo className="shrink-0" />
+        <BrandLogo className="shrink-0" variant="header" />
         <nav className="hidden min-w-0 flex-1 items-center justify-center gap-1 lg:flex">
           {navGroups.map((group) => (
             <NavDropdown
