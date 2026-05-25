@@ -82,6 +82,9 @@ export interface BillingPlan {
   description: string;
   bestFor: string;
   priceINR: number;
+  originalPriceINR?: number | null;
+  discountPercent?: number | null;
+  discountLabel?: string | null;
   billingType: BillingType;
   durationDays: number;
   currency: string;
@@ -123,6 +126,11 @@ export interface BillingOrder {
   planId: BillingPlanId;
   planName: string;
   amount: number;
+  amountPaid?: number;
+  priceINR?: number;
+  originalPriceINR?: number | null;
+  discountPercent?: number | null;
+  discountLabel?: string | null;
   currency: string;
   razorpayOrderId: string;
   status: BillingOrderStatus;
@@ -142,6 +150,11 @@ export interface PaymentRecord {
   razorpayOrderId: string;
   razorpayPaymentId: string;
   amount: number;
+  amountPaid?: number;
+  priceINR?: number;
+  originalPriceINR?: number | null;
+  discountPercent?: number | null;
+  discountLabel?: string | null;
   currency: string;
   status: PaymentStatus;
   method: string;

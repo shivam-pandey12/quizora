@@ -16,7 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast-provider";
 import { useAuth } from "@/lib/auth/auth-provider";
 import { getBillingMode } from "@/lib/billing/config";
-import { formatINR, getPlan, getActivePlans } from "@/lib/billing/plans";
+import { formatINR, getPlan, getActivePlans, hasPlanDiscount } from "@/lib/billing/plans";
 import {
   createManualRefundRecord,
   grantManualEntitlement,
@@ -34,6 +34,10 @@ import type { BillingAuditLog, BillingPlanId, Entitlement, PaymentRecord, Refund
 
 function formatSubunitAmount(amount: number) {
   return formatINR(Math.round(amount / 100));
+}
+
+function paidAmount(record: { amount: number; amountPaid?: number }) {
+  return record.amountPaid ?? record.amount;
 }
 
 function PageIntro({ eyebrow, title, description }: { eyebrow: string; title: string; description: string }) {
@@ -85,7 +89,7 @@ export function AdminBillingDashboard() {
   }, []);
 
   const capturedPayments = payments.filter((payment) => payment.status === "captured" || payment.status === "authorized");
-  const revenue = capturedPayments.reduce((total, payment) => total + payment.amount, 0);
+  const revenue = capturedPayments.reduce((total, payment) => total + paidAmount(payment), 0);
   const activeEntitlements = entitlements.filter((item) => item.status === "active").length;
   const failedPayments = payments.filter((payment) => payment.status === "failed").length;
   const pendingRefunds = refunds.filter((refund) => refund.status === "requested" || refund.status === "reviewing").length;
@@ -119,7 +123,49 @@ export function AdminBillingDashboard() {
                         <p className="mt-2 font-semibold">{payment.planName}</p>
                         <p className="text-sm text-muted-foreground">{payment.userEmail || payment.userId}</p>
                       </div>
-                      <p className="font-semibold">{formatSubunitAmount(payment.amount)}</p>
+                      <div className="text-right">
+                        {payment.originalPriceINR && payment.discountLabel ? (
+                          <div className="mb-1 flex justify-end gap-2 text-xs">
+                            <span className="font-semibold text-muted-foreground line-through decoration-primary/70 decoration-2">
+                              {formatINR(payment.originalPriceINR)}
+                            </span>
+                            <Badge className="border-success/30 bg-success/10 text-success">
+                              {payment.discountLabel}
+                            </Badge>
+                          </div>
+                        ) : null}
+                        <p className="font-semibold">{formatSubunitAmount(paidAmount(payment))}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+            <Card className="p-5">
+              <SectionHeader title="Plan price snapshot" description="Admin-visible comparison of public checkout prices." />
+              <div className="mt-4 grid gap-3">
+                {getActivePlans().map((plan) => (
+                  <div className="rounded-2xl border border-border bg-surface/70 p-3" key={plan.id}>
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="font-semibold">{plan.name}</p>
+                        <p className="text-xs text-muted-foreground">{plan.billingType}</p>
+                      </div>
+                      {hasPlanDiscount(plan) ? (
+                        <div className="text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <span className="text-xs font-semibold text-muted-foreground line-through decoration-primary/70 decoration-2">
+                              {formatINR(plan.originalPriceINR ?? plan.priceINR)}
+                            </span>
+                            <Badge className="border-success/30 bg-success/10 text-success">
+                              {plan.discountLabel}
+                            </Badge>
+                          </div>
+                          <p className="mt-1 font-semibold">{formatINR(plan.priceINR)}</p>
+                        </div>
+                      ) : (
+                        <p className="font-semibold">{formatINR(plan.priceINR)}</p>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -226,7 +272,17 @@ export function AdminPaymentsPage() {
                   </p>
                 </div>
                 <div className="text-left lg:text-right">
-                  <p className="text-2xl font-semibold">{formatSubunitAmount(payment.amount)}</p>
+                  {payment.originalPriceINR && payment.discountLabel ? (
+                    <div className="mb-1 flex justify-start gap-2 lg:justify-end">
+                      <span className="text-sm font-semibold text-muted-foreground line-through decoration-primary/70 decoration-2">
+                        {formatINR(payment.originalPriceINR)}
+                      </span>
+                      <Badge className="border-success/30 bg-success/10 text-success">
+                        {payment.discountLabel}
+                      </Badge>
+                    </div>
+                  ) : null}
+                  <p className="text-2xl font-semibold">{formatSubunitAmount(paidAmount(payment))}</p>
                   <p className="text-sm text-muted-foreground">{formatDate(payment.createdAt)}</p>
                 </div>
               </div>
@@ -359,7 +415,10 @@ export function AdminEntitlementsPage() {
               Plan
               <Select value={grantForm.planId} onChange={(event) => setGrantForm((current) => ({ ...current, planId: event.target.value as BillingPlanId }))}>
                 {getActivePlans().filter((plan) => plan.id !== "free").map((plan) => (
-                  <option key={plan.id} value={plan.id}>{plan.name}</option>
+                  <option key={plan.id} value={plan.id}>
+                    {plan.name} - {formatINR(plan.priceINR)}
+                    {hasPlanDiscount(plan) ? ` (${plan.discountLabel})` : ""}
+                  </option>
                 ))}
               </Select>
             </label>

@@ -437,6 +437,18 @@ const categoryThemes = [
 ];
 
 const thirdDifficulties = ["hard", "hard", "expert", "hard"];
+const paidPlanDiscount = {
+  discountPercent: 50,
+  discountLabel: "50% OFF"
+};
+
+function halfOff(originalPriceINR) {
+  return {
+    originalPriceINR,
+    priceINR: Math.floor(originalPriceINR * 0.5),
+    ...paidPlanDiscount
+  };
+}
 
 function slugify(value) {
   return value
@@ -699,7 +711,7 @@ export function getStarterContentPack() {
       name: "Plus",
       description: "Unlock richer solo progress, more live-room play, quick matches, and premium profile touches.",
       bestFor: "Active quiz players",
-      priceINR: 199,
+      ...halfOff(199),
       billingType: "monthly-pass",
       durationDays: 30,
       currency: "INR",
@@ -714,7 +726,7 @@ export function getStarterContentPack() {
       name: "Creator",
       description: "Create class-use quiz drafts, manage private learning content, and review creator analytics.",
       bestFor: "Quiz creators and tutors",
-      priceINR: 499,
+      ...halfOff(499),
       billingType: "monthly-pass",
       durationDays: 30,
       currency: "INR",
@@ -729,7 +741,7 @@ export function getStarterContentPack() {
       name: "Classroom",
       description: "Expand teacher workflows with larger classes, assignments, analytics, exports, and class rooms.",
       bestFor: "Teachers and learning cohorts",
-      priceINR: 999,
+      ...halfOff(999),
       billingType: "monthly-pass",
       durationDays: 30,
       currency: "INR",

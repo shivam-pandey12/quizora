@@ -16,6 +16,9 @@ export async function POST(request: Request) {
     if (!plan || !plan.isActive || plan.id === "free") {
       return NextResponse.json({ error: "Choose an active paid Quizora plan." }, { status: 400 });
     }
+    if (plan.priceINR <= 0) {
+      return NextResponse.json({ error: "Paid plan price is not configured correctly." }, { status: 400 });
+    }
 
     const config = assertRazorpayServerConfigured();
     const amount = amountToSubunits(plan.priceINR);
@@ -57,6 +60,9 @@ export async function POST(request: Request) {
         id: plan.id,
         name: plan.name,
         priceINR: plan.priceINR,
+        originalPriceINR: plan.originalPriceINR ?? null,
+        discountPercent: plan.discountPercent ?? null,
+        discountLabel: plan.discountLabel ?? null,
         durationDays: plan.durationDays
       }
     });

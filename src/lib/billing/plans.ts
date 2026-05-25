@@ -28,6 +28,18 @@ export const billingLimitLabels: Record<string, string> = {
 };
 
 const now = null;
+const paidPlanDiscount = {
+  discountPercent: 50,
+  discountLabel: "50% OFF"
+};
+
+function halfOff(originalPriceINR: number) {
+  return {
+    originalPriceINR,
+    priceINR: Math.floor(originalPriceINR * 0.5),
+    ...paidPlanDiscount
+  };
+}
 
 export const planCatalog: BillingPlan[] = [
   {
@@ -60,7 +72,7 @@ export const planCatalog: BillingPlan[] = [
     name: "Plus",
     description: "Unlock richer solo progress, more live-room play, quick matches, and premium profile touches.",
     bestFor: "Active quiz players",
-    priceINR: 199,
+    ...halfOff(199),
     billingType: "monthly-pass",
     durationDays: 30,
     currency: "INR",
@@ -93,7 +105,7 @@ export const planCatalog: BillingPlan[] = [
     name: "Creator",
     description: "Create class-use quiz drafts, manage private learning content, and review creator analytics.",
     bestFor: "Quiz creators and tutors",
-    priceINR: 499,
+    ...halfOff(499),
     billingType: "monthly-pass",
     durationDays: 30,
     currency: "INR",
@@ -127,7 +139,7 @@ export const planCatalog: BillingPlan[] = [
     name: "Classroom",
     description: "Expand teacher workflows with larger classes, more assignments, analytics, exports, and class rooms.",
     bestFor: "Teachers and learning cohorts",
-    priceINR: 999,
+    ...halfOff(999),
     billingType: "monthly-pass",
     durationDays: 30,
     currency: "INR",
@@ -195,6 +207,9 @@ export function getAdminUnlockedPlan(): BillingPlan {
     description: "Admin profile access with every Quizora premium feature unlocked.",
     bestFor: "Quizora admin",
     priceINR: 0,
+    originalPriceINR: null,
+    discountPercent: null,
+    discountLabel: null,
     billingType: "free",
     durationDays: 0,
     features: [...featureSet],
@@ -210,6 +225,16 @@ export function formatINR(amount: number) {
     currency: "INR",
     maximumFractionDigits: 0
   }).format(amount);
+}
+
+export function hasPlanDiscount(plan: BillingPlan) {
+  return (
+    plan.id !== "free" &&
+    typeof plan.originalPriceINR === "number" &&
+    plan.originalPriceINR > plan.priceINR &&
+    typeof plan.discountPercent === "number" &&
+    plan.discountPercent > 0
+  );
 }
 
 export function hasPlanFeature(plan: BillingPlan, featureKey: string) {

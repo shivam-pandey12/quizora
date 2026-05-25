@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useEntitlement } from "@/lib/billing/entitlement-provider";
-import { billingLimitLabels, formatINR } from "@/lib/billing/plans";
+import { billingLimitLabels, formatINR, hasPlanDiscount } from "@/lib/billing/plans";
 import type { BillingPlan } from "@/types/domain";
 
 export function PlanBadge({ plan }: { plan?: BillingPlan | null }) {
@@ -120,13 +120,32 @@ export function PriceLine({ plan }: { plan: BillingPlan }) {
   if (plan.priceINR === 0) {
     return <p className="text-4xl font-semibold">Free</p>;
   }
+  const discounted = hasPlanDiscount(plan);
   return (
-    <p className="text-4xl font-semibold">
-      {formatINR(plan.priceINR)}
-      <span className="ml-2 text-base font-medium text-muted-foreground">
-        / {plan.durationDays} days
-      </span>
-    </p>
+    <div className="space-y-2">
+      {discounted ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm font-semibold text-muted-foreground line-through decoration-primary/70 decoration-2">
+            {formatINR(plan.originalPriceINR ?? plan.priceINR)}
+          </span>
+          <Badge className="border-success/30 bg-success/10 text-success">
+            <Sparkles className="mr-1.5 size-3.5" />
+            {plan.discountLabel ?? `${plan.discountPercent}% OFF`}
+          </Badge>
+        </div>
+      ) : null}
+      <p className="text-4xl font-semibold">
+        {formatINR(plan.priceINR)}
+        <span className="ml-2 text-base font-medium text-muted-foreground">
+          / {plan.durationDays} days
+        </span>
+      </p>
+      {discounted ? (
+        <span className="block text-xs font-semibold uppercase tracking-[0.12em] text-primary">
+          Payable checkout amount
+        </span>
+      ) : null}
+    </div>
   );
 }
 

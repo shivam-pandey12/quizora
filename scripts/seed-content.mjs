@@ -107,6 +107,20 @@ function validatePack(pack) {
   assert(pack.badgeDefinitions.length === 24, `Expected 24 badge definitions, found ${pack.badgeDefinitions.length}.`, errors);
   assert(pack.plans.length === 4, `Expected 4 plans, found ${pack.plans.length}.`, errors);
 
+  pack.plans.forEach((plan) => {
+    assert(plan.id && plan.name && typeof plan.priceINR === "number", `Plan ${plan.id || "unknown"} needs a price.`, errors);
+    if (plan.id === "free") {
+      assert(plan.priceINR === 0, "Free plan must remain zero-priced.", errors);
+      assert(!plan.discountPercent && !plan.discountLabel, "Free plan must not show a paid discount.", errors);
+    } else {
+      assert(plan.priceINR > 0, `Paid plan ${plan.id} must have a positive payable price.`, errors);
+      assert(typeof plan.originalPriceINR === "number", `Paid plan ${plan.id} needs originalPriceINR.`, errors);
+      assert(plan.originalPriceINR > plan.priceINR, `Paid plan ${plan.id} originalPriceINR must be greater than priceINR.`, errors);
+      assert(plan.discountPercent === 50, `Paid plan ${plan.id} must use a 50 percent discount.`, errors);
+      assert(plan.discountLabel === "50% OFF", `Paid plan ${plan.id} must use the 50% OFF label.`, errors);
+    }
+  });
+
   pack.categories.forEach((category) => {
     assert(category.name.trim().length > 0, `Category ${category.slug} needs a name.`, errors);
     assert(slugPattern.test(category.slug), `Category slug ${category.slug} is not URL-safe.`, errors);

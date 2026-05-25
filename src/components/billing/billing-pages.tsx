@@ -24,6 +24,10 @@ function formatSubunitAmount(amount: number) {
   return formatINR(Math.round(amount / 100));
 }
 
+function paidAmount(record: { amount: number; amountPaid?: number }) {
+  return record.amountPaid ?? record.amount;
+}
+
 export function BillingPage({ historyOnly = false }: { historyOnly?: boolean }) {
   const { user } = useAuth();
   const { plan, entitlement, entitlements, loading, error, refreshEntitlements, getLimit } = useEntitlement();
@@ -177,7 +181,19 @@ export function BillingPage({ historyOnly = false }: { historyOnly?: boolean }) 
                           {payment.razorpayPaymentId.slice(0, 12)}... • {formatDate(payment.createdAt)}
                         </p>
                       </div>
-                      <p className="text-xl font-semibold">{formatSubunitAmount(payment.amount)}</p>
+                      <div className="text-left sm:text-right">
+                        {payment.originalPriceINR && payment.discountLabel ? (
+                          <div className="mb-1 flex flex-wrap items-center gap-2 sm:justify-end">
+                            <span className="text-sm font-semibold text-muted-foreground line-through decoration-primary/70 decoration-2">
+                              {formatINR(payment.originalPriceINR)}
+                            </span>
+                            <Badge className="border-success/30 bg-success/10 text-success">
+                              {payment.discountLabel}
+                            </Badge>
+                          </div>
+                        ) : null}
+                        <p className="text-xl font-semibold">{formatSubunitAmount(paidAmount(payment))}</p>
+                      </div>
                     </div>
                   </div>
                 )) : (
@@ -198,6 +214,7 @@ export function BillingPage({ historyOnly = false }: { historyOnly?: boolean }) 
                     <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-surface/70 p-3 text-sm" key={order.id}>
                       <span>{order.planName}</span>
                       <span className="text-muted-foreground">{order.razorpayOrderId}</span>
+                      <span className="font-semibold">{formatSubunitAmount(paidAmount(order))}</span>
                       <Badge>{order.status}</Badge>
                     </div>
                   ))}
