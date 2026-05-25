@@ -73,6 +73,15 @@ function mapSeoQuiz(id: string, data: Record<string, unknown>): Quiz {
     ? (data.status as QuizStatus)
     : "draft";
   const visibility = data.visibility === "private" ? "private" : ("public" satisfies QuizVisibility);
+  const ownerType = data.ownerType === "creator" ? "creator" : "admin";
+  const reviewStatus =
+    data.reviewStatus === "submitted" ||
+    data.reviewStatus === "approved" ||
+    data.reviewStatus === "rejected"
+      ? data.reviewStatus
+      : ownerType === "admin" && status === "published"
+        ? "approved"
+        : "draft";
 
   return {
     id,
@@ -95,17 +104,22 @@ function mapSeoQuiz(id: string, data: Record<string, unknown>): Quiz {
     isDailyChallenge: asBoolean(data.isDailyChallenge),
     ownerId: asString(data.ownerId),
     ownerName: asString(data.ownerName),
-    ownerType: data.ownerType === "creator" ? "creator" : "admin",
+    ownerEmail: asString(data.ownerEmail),
+    ownerType,
     publishScope:
       data.publishScope === "class-only" || data.publishScope === "private"
         ? data.publishScope
         : "global",
-    reviewStatus:
-      data.reviewStatus === "submitted" ||
-      data.reviewStatus === "approved" ||
-      data.reviewStatus === "rejected"
-        ? data.reviewStatus
-        : "draft",
+    reviewStatus,
+    updatedBy: asString(data.updatedBy),
+    rejectionNote: asString(data.rejectionNote),
+    submittedAt: toIso(data.submittedAt),
+    reviewedAt: toIso(data.reviewedAt),
+    reviewedBy: asString(data.reviewedBy),
+    reviewedByName: asString(data.reviewedByName),
+    approvedAt: toIso(data.approvedAt),
+    approvedBy: asString(data.approvedBy),
+    creatorEditable: asBoolean(data.creatorEditable, true),
     allowedClassIds: asStringArray(data.allowedClassIds),
     playCount: asNumber(data.playCount),
     averageScore: asNumber(data.averageScore),
@@ -134,6 +148,8 @@ export async function listSeoPublicQuizzes() {
       collection(seoDb, "quizzes"),
       where("status", "==", "published"),
       where("visibility", "==", "public"),
+      where("publishScope", "==", "global"),
+      where("reviewStatus", "==", "approved"),
       orderBy("publishedAt", "desc"),
       limit(80)
     )
@@ -180,6 +196,8 @@ export async function getSeoPublicQuizBySlug(slug: string) {
       where("slug", "==", slug),
       where("status", "==", "published"),
       where("visibility", "==", "public"),
+      where("publishScope", "==", "global"),
+      where("reviewStatus", "==", "approved"),
       limit(1)
     )
   );
@@ -217,6 +235,8 @@ export async function listSeoPublicQuizzesByCategory(categoryId: string) {
       collection(seoDb, "quizzes"),
       where("status", "==", "published"),
       where("visibility", "==", "public"),
+      where("publishScope", "==", "global"),
+      where("reviewStatus", "==", "approved"),
       where("categoryId", "==", categoryId),
       orderBy("publishedAt", "desc"),
       limit(80)

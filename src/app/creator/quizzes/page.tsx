@@ -1,4 +1,4 @@
-import { CreatorQuizzesPage } from "@/components/classroom/creator-pages";
+import { CreatorQuizzesPage } from "@/components/creator/creator-quiz-pages";
 
 export default function CreatorQuizzesRoute() {
   return <CreatorQuizzesPage />;

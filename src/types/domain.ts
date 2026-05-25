@@ -6,6 +6,7 @@ export type QuestionType = "single-choice" | "multiple-choice" | "true-false" | 
 export type QuestionStatus = "active" | "hidden";
 export type UserRole = "user" | "admin";
 export type CreatorStatus = "none" | "pending" | "approved" | "suspended";
+export type CreatorRequestStatus = "pending" | "approved" | "rejected";
 export type AttemptStatus = "completed" | "abandoned";
 export type AttemptMode = "solo" | "live-room" | "assignment";
 export type AttemptSessionStatus = "active" | "submitted" | "expired" | "cancelled";
@@ -36,6 +37,20 @@ export type RoomPlayerStatus =
   | "left"
   | "disconnected";
 export type RoomAnswerStatus = "idle" | "submitted" | "skipped" | "correct" | "wrong";
+export type FlashMode = "live" | "self-paced";
+export type FlashStatus = "draft" | "active" | "running" | "ended" | "expired" | "archived";
+export type FlashVisibility = "link-only";
+export type FlashLeaderboardMode = "score" | "score-speed";
+export type FlashPlayerRole = "host" | "player";
+export type FlashPlayerStatus =
+  | "joined"
+  | "ready"
+  | "playing"
+  | "submitted"
+  | "completed"
+  | "left"
+  | "disconnected";
+export type FlashReportStatus = "open" | "reviewing" | "resolved" | "dismissed";
 export type BotDifficulty = "easy" | "medium" | "hard";
 export type MatchmakingQueueStatus = "searching" | "matched" | "cancelled" | "expired";
 export type MatchmakingPlayerCount = 2 | 3 | 4 | "flexible";
@@ -260,15 +275,45 @@ export interface Quiz {
   playCount: number;
   averageScore: number;
   createdBy: string;
+  updatedBy?: string;
   ownerId: string;
   ownerName: string;
+  ownerEmail?: string;
   ownerType: CreatorQuizOwnerType;
   publishScope: QuizPublishScope;
   reviewStatus: QuizReviewStatus;
+  rejectionNote?: string;
+  submittedAt?: string | null;
+  reviewedAt?: string | null;
+  reviewedBy?: string;
+  reviewedByName?: string;
+  approvedAt?: string | null;
+  approvedBy?: string;
+  creatorEditable?: boolean;
   allowedClassIds: string[];
   createdAt: string | null;
   updatedAt: string | null;
   publishedAt: string | null;
+}
+
+export interface CreatorRequest {
+  id: string;
+  userId: string;
+  displayName: string;
+  email: string;
+  photoURL: string | null;
+  reason: string;
+  interests: string;
+  experience: string;
+  intendedUse: string;
+  agreementAccepted: boolean;
+  status: CreatorRequestStatus;
+  adminNote: string;
+  reviewedBy: string;
+  reviewedByName: string;
+  reviewedAt: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
 }
 
 export interface Question {
@@ -632,6 +677,166 @@ export interface RoomInput {
   classId?: string | null;
   className?: string | null;
   allowedMemberOnly?: boolean;
+}
+
+export interface FlashQuizSettings {
+  shuffleQuestions: boolean;
+  shuffleOptions: boolean;
+  showCorrectAfterEachQuestion: boolean;
+  allowLateJoin: boolean;
+  autoAdvance: boolean;
+  requireLogin: boolean;
+  allowRetake: boolean;
+  maxAttemptsPerPlayer: number;
+  showLeaderboardDuringPlay: boolean;
+  showLeaderboardAfterFinish: boolean;
+}
+
+export interface FlashQuiz {
+  id: string;
+  flashCode: string;
+  title: string;
+  description: string;
+  hostId: string;
+  hostName: string;
+  hostPhotoURL: string | null;
+  mode: FlashMode;
+  status: FlashStatus;
+  visibility: FlashVisibility;
+  expiryHours: number;
+  expiresAt: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+  startedAt: string | null;
+  endedAt: string | null;
+  currentQuestionIndex: number;
+  questionStartedAt: string | null;
+  questionEndsAt: string | null;
+  questionCount: number;
+  totalPoints: number;
+  maxPlayers: number;
+  playerCount: number;
+  allowGuests: boolean;
+  showAnswersAfterEach: boolean;
+  leaderboardMode: FlashLeaderboardMode;
+  questionTimerSeconds: number;
+  lockAfterStart: boolean;
+  isPremiumExtended: boolean;
+  extensionCount: number;
+  source: "flash";
+  convertedQuizId: string | null;
+  antiAbuse: {
+    duplicateAnswerAttempts: number;
+    failedJoinAttempts: number;
+    reportCount: number;
+    flags: string[];
+  };
+  settings: FlashQuizSettings;
+}
+
+export interface FlashQuestion {
+  id: string;
+  flashQuizId: string;
+  questionText: string;
+  type: QuestionType;
+  options: QuestionOption[];
+  correctAnswer: string;
+  correctAnswers: string[];
+  explanation: string;
+  points: number;
+  timeLimitSeconds: number;
+  order: number;
+  status: QuestionStatus;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+export interface FlashPlayer {
+  id: string;
+  flashQuizId: string;
+  flashCode: string;
+  userId: string;
+  displayName: string;
+  photoURL: string | null;
+  role: FlashPlayerRole;
+  isGuest: boolean;
+  status: FlashPlayerStatus;
+  score: number;
+  accuracy: number;
+  rank: number;
+  previousRank: number;
+  rankDelta: number;
+  correctCount: number;
+  wrongCount: number;
+  skippedCount: number;
+  totalTimeSeconds: number;
+  joinedAt: string | null;
+  lastActiveAt: string | null;
+  completedAt: string | null;
+}
+
+export interface FlashAnswer {
+  id: string;
+  flashQuizId: string;
+  flashCode: string;
+  playerId: string;
+  userId: string;
+  questionId: string;
+  questionIndex: number;
+  selectedAnswer: string;
+  selectedAnswers: string[];
+  isCorrect: boolean;
+  pointsEarned: number;
+  pointsPossible: number;
+  timeTakenSeconds: number;
+  answeredAt: string | null;
+  createdAt: string | null;
+}
+
+export interface FlashResult {
+  id: string;
+  flashQuizId: string;
+  flashCode: string;
+  playerId: string;
+  userId: string;
+  displayName: string;
+  photoURL: string | null;
+  score: number;
+  totalPoints: number;
+  accuracy: number;
+  correctCount: number;
+  wrongCount: number;
+  skippedCount: number;
+  rank: number;
+  previousRank: number;
+  totalTimeSeconds: number;
+  completedAt: string | null;
+  createdAt: string | null;
+}
+
+export interface FlashReport {
+  id: string;
+  flashQuizId: string;
+  flashCode: string;
+  reportedBy: string;
+  reason: string;
+  details: string;
+  status: FlashReportStatus;
+  createdAt: string | null;
+  updatedAt: string | null;
+  reviewedBy: string;
+  adminNote: string;
+}
+
+export interface FlashLimits {
+  maxExpiryHours: number;
+  maxQuestions: number;
+  maxPlayers: number;
+  maxActiveFlashQuizzes: number;
+  canExportResults: boolean;
+  canExtendExpiry: boolean;
+  canConvertToDraft: boolean;
+  hasAdvancedHostDashboard: boolean;
 }
 
 export interface QuickMatchPreferences {

@@ -17,8 +17,9 @@ import { useEntitlement } from "@/lib/billing/entitlement-provider";
 import { listRecentUserAttempts } from "@/lib/firestore/attempts";
 import { getCurrentUserRank } from "@/lib/firestore/leaderboards";
 import { listUserRoomHistory } from "@/lib/firestore/rooms";
+import { listUserFlashHistory } from "@/lib/firestore/flash";
 import { getLevelProgress } from "@/lib/quiz/xp";
-import type { Attempt, LeaderboardEntry, RoomResult } from "@/types/domain";
+import type { Attempt, FlashQuiz, FlashResult, LeaderboardEntry, RoomResult } from "@/types/domain";
 
 const icons = [
   <Trophy className="size-5" key="played" />,
@@ -35,6 +36,8 @@ export function DashboardContent() {
   const [attemptsError, setAttemptsError] = useState<string | null>(null);
   const [globalRank, setGlobalRank] = useState<LeaderboardEntry | null>(null);
   const [roomResults, setRoomResults] = useState<RoomResult[]>([]);
+  const [flashHosted, setFlashHosted] = useState<FlashQuiz[]>([]);
+  const [flashResults, setFlashResults] = useState<FlashResult[]>([]);
   const name = profile?.displayName || "Quizora Player";
   const adminOverride = hasAdminAccess({ email: user?.email, profile });
 
@@ -85,6 +88,31 @@ export function DashboardContent() {
     }
 
     void loadRooms();
+    return () => {
+      mounted = false;
+    };
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    const currentUser = user;
+    let mounted = true;
+    async function loadFlash() {
+      try {
+        const history = await listUserFlashHistory(currentUser.uid, 4);
+        if (mounted) {
+          setFlashHosted(history.hosted);
+          setFlashResults(history.results);
+        }
+      } catch {
+        if (mounted) {
+          setFlashHosted([]);
+          setFlashResults([]);
+        }
+      }
+    }
+
+    void loadFlash();
     return () => {
       mounted = false;
     };
@@ -257,6 +285,26 @@ export function DashboardContent() {
             Live-room results will appear here after your first completed multiplayer session.
           </p>
         )}
+      </Card>
+
+      <Card className="p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold uppercase text-primary">Flash Quizzes</p>
+            <h2 className="mt-2 text-2xl font-semibold">Temporary quiz activity</h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Flash results are temporary and do not update permanent attempts, XP, or global leaderboards.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button href="/flash/create" icon={<RadioTower className="size-4" />}>Create Flash</Button>
+            <Button href="/flash/history" variant="secondary">Flash History</Button>
+          </div>
+        </div>
+        <div className="mt-5 grid gap-4 md:grid-cols-2">
+          <StatCard label="Hosted Flash" value={String(flashHosted.length)} helper="Recent temporary quizzes" />
+          <StatCard label="Played Flash" value={String(flashResults.length)} helper="Recent temporary results" />
+        </div>
       </Card>
 
       <div className="grid gap-4 md:grid-cols-3">

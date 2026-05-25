@@ -17,6 +17,7 @@ import { calculateStreakUpdate, evaluateBadgesForAttempt, normalizeBadges } from
 import { getPeriodKey } from "@/lib/quiz/periods";
 import { scoreQuizAttempt, scoreSingleQuestion } from "@/lib/quiz/scoring";
 import { calculateXPForAttempt } from "@/lib/quiz/xp";
+import { isPublicApprovedQuiz } from "@/lib/quiz/public-visibility";
 import type {
   Attempt,
   AttemptMode,
@@ -98,6 +99,16 @@ function asStringArray(value: unknown) {
 }
 
 function mapQuizFromData(id: string, data: RawData): Quiz {
+  const status = data.status === "published" || data.status === "archived" ? data.status : "draft";
+  const ownerType = data.ownerType === "creator" ? "creator" : "admin";
+  const reviewStatus =
+    data.reviewStatus === "submitted" ||
+    data.reviewStatus === "approved" ||
+    data.reviewStatus === "rejected"
+      ? data.reviewStatus
+      : ownerType === "admin" && status === "published"
+        ? "approved"
+        : "draft";
   return {
     id,
     title: asString(data.title),
@@ -110,7 +121,7 @@ function mapQuizFromData(id: string, data: RawData): Quiz {
       data.difficulty === "medium" || data.difficulty === "hard" || data.difficulty === "expert"
         ? data.difficulty
         : "easy",
-    status: data.status === "published" || data.status === "archived" ? data.status : "draft",
+    status,
     visibility: data.visibility === "private" ? "private" : "public",
     thumbnailUrl: asString(data.thumbnailUrl),
     tags: asStringArray(data.tags),
@@ -123,19 +134,24 @@ function mapQuizFromData(id: string, data: RawData): Quiz {
     playCount: asNumber(data.playCount),
     averageScore: asNumber(data.averageScore),
     createdBy: asString(data.createdBy),
+    updatedBy: asString(data.updatedBy),
     ownerId: asString(data.ownerId, asString(data.createdBy)),
     ownerName: asString(data.ownerName, "Quizora Studio"),
-    ownerType: data.ownerType === "creator" ? "creator" : "admin",
+    ownerEmail: asString(data.ownerEmail),
+    ownerType,
     publishScope:
       data.publishScope === "class-only" || data.publishScope === "private"
         ? data.publishScope
         : "global",
-    reviewStatus:
-      data.reviewStatus === "submitted" ||
-      data.reviewStatus === "approved" ||
-      data.reviewStatus === "rejected"
-        ? data.reviewStatus
-        : "draft",
+    reviewStatus,
+    rejectionNote: asString(data.rejectionNote),
+    submittedAt: toIso(data.submittedAt),
+    reviewedAt: toIso(data.reviewedAt),
+    reviewedBy: asString(data.reviewedBy),
+    reviewedByName: asString(data.reviewedByName),
+    approvedAt: toIso(data.approvedAt),
+    approvedBy: asString(data.approvedBy),
+    creatorEditable: asBoolean(data.creatorEditable, true),
     allowedClassIds: asStringArray(data.allowedClassIds),
     createdAt: toIso(data.createdAt),
     updatedAt: toIso(data.updatedAt),
@@ -265,9 +281,9 @@ async function getAssignmentContext({
 
 function quizCanPlay(quiz: Quiz, assignment: Awaited<ReturnType<typeof getAssignmentContext>>) {
   if (quiz.status !== "published") return false;
-  if (!assignment) return quiz.visibility === "public";
+  if (!assignment) return isPublicApprovedQuiz(quiz);
   return (
-    quiz.visibility === "public" ||
+    isPublicApprovedQuiz(quiz) ||
     quiz.publishScope === "class-only" ||
     quiz.allowedClassIds.includes(assignment.classId)
   );

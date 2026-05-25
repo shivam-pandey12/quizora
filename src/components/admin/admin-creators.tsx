@@ -14,7 +14,7 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { useToast } from "@/components/ui/toast-provider";
 import { listAdminUsers } from "@/lib/firestore/admin-analytics";
 import { listAdminQuizzes } from "@/lib/firestore/content";
-import { reviewCreatorQuiz, updateCreatorStatus } from "@/lib/firestore/creator";
+import { updateCreatorStatus } from "@/lib/firestore/creator";
 import type { CreatorStatus, Quiz, UserProfile } from "@/types/domain";
 
 export function AdminCreators() {
@@ -60,12 +60,6 @@ export function AdminCreators() {
     await load();
   }
 
-  async function reviewQuiz(quiz: Quiz, reviewStatus: "approved" | "rejected") {
-    await reviewCreatorQuiz(quiz.id, reviewStatus);
-    showToast({ tone: "success", title: "Quiz review updated", description: `${quiz.title}: ${reviewStatus}` });
-    await load();
-  }
-
   const state = <AdminDataState loading={loading} error={null} empty={!creators.length && !quizzes.length} emptyTitle="No creators found" emptyDescription="Creator requests and class-use quiz drafts will appear here." />;
 
   return (
@@ -76,6 +70,14 @@ export function AdminCreators() {
         <StatCard label="Approved" value={String(users.filter((user) => user.creatorStatus === "approved").length)} helper="Can create classes" />
         <StatCard icon={<FileQuestion className="size-5" />} label="Creator quizzes" value={String(quizzes.length)} helper="Class-use content" />
       </div>
+      <Card className="grid gap-3 p-4 md:grid-cols-2">
+        <Button href="/admin/creator-requests" icon={<UserCog className="size-4" />} variant="secondary">
+          Review creator requests
+        </Button>
+        <Button href="/admin/creator-quizzes" icon={<FileQuestion className="size-4" />} variant="secondary">
+          Review submitted quizzes
+        </Button>
+      </Card>
       <Card className="p-4">
         <div className="grid gap-3 md:grid-cols-[1fr_14rem]">
           <label className="relative block">
@@ -132,8 +134,7 @@ export function AdminCreators() {
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <Button href={`/admin/quizzes/${quiz.id}/questions`} size="sm" variant="secondary">Questions</Button>
-                    <Button onClick={() => void reviewQuiz(quiz, "approved")} size="sm">Approve</Button>
-                    <Button onClick={() => void reviewQuiz(quiz, "rejected")} size="sm" variant="danger">Reject</Button>
+                    <Button href={`/admin/creator-quizzes`} size="sm">Review queue</Button>
                   </div>
                 </div>
               </div>

@@ -5,6 +5,11 @@ export const billingFeatureLabels: Record<string, string> = {
   "rooms.create": "Create live rooms",
   "rooms.largerRooms": "Larger live rooms",
   "rooms.botFill": "Bot fill controls",
+  "flash.create": "Create Flash Quizzes",
+  "flash.advancedHost": "Advanced Flash host dashboard",
+  "flash.exportResults": "Flash result export",
+  "flash.extendExpiry": "Extend Flash expiry",
+  "flash.convertToDraft": "Convert Flash to creator draft",
   "matchmaking.quickMatch": "More quick matches",
   "analytics.advancedProgress": "Advanced progress insights",
   "creator.createQuizzes": "Creator quiz drafts",
@@ -24,7 +29,11 @@ export const billingLimitLabels: Record<string, string> = {
   maxStudentsPerClass: "Students / class",
   maxAssignments: "Assignments / month",
   maxCreatorQuizzes: "Creator quiz drafts",
-  maxExportsPerMonth: "Exports / month"
+  maxExportsPerMonth: "Exports / month",
+  flashMaxExpiryHours: "Flash expiry hours",
+  flashMaxQuestions: "Flash questions",
+  flashMaxPlayers: "Flash players",
+  flashMaxActive: "Active Flash Quizzes"
 };
 
 const now = null;
@@ -51,7 +60,7 @@ export const planCatalog: BillingPlan[] = [
     billingType: "free",
     durationDays: 0,
     currency: "INR",
-    features: ["rooms.create", "matchmaking.quickMatch"],
+    features: ["rooms.create", "flash.create", "matchmaking.quickMatch"],
     limits: {
       maxCreatedRooms: 3,
       maxQuickMatchesPerDay: 5,
@@ -59,7 +68,11 @@ export const planCatalog: BillingPlan[] = [
       maxStudentsPerClass: 15,
       maxAssignments: 4,
       maxCreatorQuizzes: 3,
-      maxExportsPerMonth: 0
+      maxExportsPerMonth: 0,
+      flashMaxExpiryHours: 7,
+      flashMaxQuestions: 10,
+      flashMaxPlayers: 10,
+      flashMaxActive: 2
     },
     isActive: true,
     isFeatured: false,
@@ -81,6 +94,10 @@ export const planCatalog: BillingPlan[] = [
       "rooms.create",
       "rooms.largerRooms",
       "rooms.botFill",
+      "flash.create",
+      "flash.advancedHost",
+      "flash.exportResults",
+      "flash.extendExpiry",
       "matchmaking.quickMatch",
       "analytics.advancedProgress",
       "profile.premiumThemes"
@@ -92,7 +109,11 @@ export const planCatalog: BillingPlan[] = [
       maxStudentsPerClass: 15,
       maxAssignments: 4,
       maxCreatorQuizzes: 3,
-      maxExportsPerMonth: 2
+      maxExportsPerMonth: 2,
+      flashMaxExpiryHours: 24,
+      flashMaxQuestions: 25,
+      flashMaxPlayers: 25,
+      flashMaxActive: 8
     },
     isActive: true,
     isFeatured: true,
@@ -113,6 +134,11 @@ export const planCatalog: BillingPlan[] = [
       "solo.unlimitedAttempts",
       "rooms.create",
       "rooms.largerRooms",
+      "flash.create",
+      "flash.advancedHost",
+      "flash.exportResults",
+      "flash.extendExpiry",
+      "flash.convertToDraft",
       "creator.createQuizzes",
       "creator.privateQuizzes",
       "creator.analytics",
@@ -126,7 +152,11 @@ export const planCatalog: BillingPlan[] = [
       maxStudentsPerClass: 40,
       maxAssignments: 40,
       maxCreatorQuizzes: 40,
-      maxExportsPerMonth: 20
+      maxExportsPerMonth: 20,
+      flashMaxExpiryHours: 168,
+      flashMaxQuestions: 50,
+      flashMaxPlayers: 50,
+      flashMaxActive: 20
     },
     isActive: true,
     isFeatured: false,
@@ -148,6 +178,11 @@ export const planCatalog: BillingPlan[] = [
       "rooms.create",
       "rooms.largerRooms",
       "rooms.botFill",
+      "flash.create",
+      "flash.advancedHost",
+      "flash.exportResults",
+      "flash.extendExpiry",
+      "flash.convertToDraft",
       "creator.createQuizzes",
       "creator.privateQuizzes",
       "creator.analytics",
@@ -164,7 +199,11 @@ export const planCatalog: BillingPlan[] = [
       maxStudentsPerClass: 120,
       maxAssignments: 200,
       maxCreatorQuizzes: 100,
-      maxExportsPerMonth: 100
+      maxExportsPerMonth: 100,
+      flashMaxExpiryHours: 720,
+      flashMaxQuestions: 100,
+      flashMaxPlayers: 120,
+      flashMaxActive: 60
     },
     isActive: true,
     isFeatured: false,

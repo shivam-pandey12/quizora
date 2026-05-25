@@ -10,6 +10,7 @@ import {
   LibraryBig,
   LogOut,
   Menu,
+  RadioTower,
   ShieldCheck,
   Sparkles,
   Trophy,
@@ -76,6 +77,12 @@ const publicNavGroups: NavMenuGroup[] = [
         label: "Rooms",
         description: "Create or join live quiz rooms",
         icon: DoorOpen
+      },
+      {
+        href: "/flash",
+        label: "Flash",
+        description: "Temporary quiz links and host dashboard",
+        icon: RadioTower
       },
       {
         href: "/matchmaking",

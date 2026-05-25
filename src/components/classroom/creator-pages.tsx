@@ -22,6 +22,7 @@ import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
@@ -127,7 +128,7 @@ function CreatorGate({ children }: { children: React.ReactNode }) {
           icon={GraduationCap}
           title="Creator approval required"
           description="Quizora classroom tools are available to admin-approved teachers and creators."
-          actionHref="/contact"
+          actionHref="/creator/request-access"
           actionLabel="Request access"
         />
       </div>
@@ -371,6 +372,7 @@ export function TeacherClassWorkspace({ classId, tab = "overview" }: { classId: 
   const [analytics, setAnalytics] = useState<ClassAnalyticsSnapshot | null>(null);
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [loading, setLoading] = useState(true);
+  const [confirmArchive, setConfirmArchive] = useState(false);
   const [assignmentForm, setAssignmentForm] = useState({
     quizId: "",
     title: "",
@@ -473,6 +475,12 @@ export function TeacherClassWorkspace({ classId, tab = "overview" }: { classId: 
     if (!classroom) return;
     const submissions = await listClassSubmissions(classroom.id);
     downloadText(`${classroom.name.replace(/\s+/g, "-").toLowerCase()}-results.csv`, classResultsToCsv(submissions));
+  }
+  async function archiveCurrentClass() {
+    if (!classroom) return;
+    await archiveClassroom(classroom.id);
+    setConfirmArchive(false);
+    router.push("/creator/classes");
   }
 
   if (loading) {
@@ -637,10 +645,18 @@ export function TeacherClassWorkspace({ classId, tab = "overview" }: { classId: 
         ) : null}
 
         <div className="mt-6">
-          <Button variant="danger" icon={<Archive className="size-4" />} onClick={() => void archiveClassroom(classroom.id).then(() => router.push("/creator/classes"))}>
+          <Button variant="danger" icon={<Archive className="size-4" />} onClick={() => setConfirmArchive(true)}>
             Archive class
           </Button>
         </div>
+        <ConfirmDialog
+          confirmLabel="Archive class"
+          description={`This archives "${classroom.name}" and closes it for normal classroom activity. Existing members, assignments, and results stay available for review.`}
+          onCancel={() => setConfirmArchive(false)}
+          onConfirm={() => void archiveCurrentClass()}
+          open={confirmArchive}
+          title="Archive this class?"
+        />
       </section>
     </CreatorGate>
   );
@@ -693,6 +709,7 @@ export function CreatorQuizzesPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [title, setTitle] = useState("");
   const [categoryId, setCategoryId] = useState("");
+  const [reviewTarget, setReviewTarget] = useState<Quiz | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -713,6 +730,12 @@ export function CreatorQuizzesPage() {
     setTitle("");
     setQuizzes(await listCreatorQuizzes(user.uid));
   }
+  async function submitForReview(quiz: Quiz) {
+    await submitCreatorQuizForReview(quiz.id);
+    showToast({ tone: "success", title: "Quiz submitted for review", description: quiz.title });
+    setReviewTarget(null);
+    if (user) setQuizzes(await listCreatorQuizzes(user.uid));
+  }
 
   return (
     <CreatorGate>
@@ -732,7 +755,7 @@ export function CreatorQuizzesPage() {
                 <div className="mt-4 flex flex-wrap gap-2">
                   <Button href={`/admin/quizzes/${quiz.id}/questions`} size="sm" variant="secondary">Questions</Button>
                   {quiz.reviewStatus === "draft" ? (
-                    <Button size="sm" onClick={() => void submitCreatorQuizForReview(quiz.id)}>Submit review</Button>
+                    <Button size="sm" onClick={() => setReviewTarget(quiz)}>Submit review</Button>
                   ) : null}
                 </div>
               </div>
@@ -752,6 +775,17 @@ export function CreatorQuizzesPage() {
           </div>
         </Card>
       </section>
+      <ConfirmDialog
+        confirmLabel="Submit for review"
+        description={`"${reviewTarget?.title ?? "This quiz"}" will be sent to admins for review and stays private until it is approved.`}
+        onCancel={() => setReviewTarget(null)}
+        onConfirm={() => {
+          if (!reviewTarget) return;
+          void submitForReview(reviewTarget);
+        }}
+        open={Boolean(reviewTarget)}
+        title="Submit this quiz for review?"
+      />
     </CreatorGate>
   );
 }

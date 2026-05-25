@@ -41,7 +41,7 @@ export const docsNavGroups = [
   },
   {
     label: "Playing Quizzes",
-    slugs: ["quizzes", "scoring"]
+    slugs: ["quizzes", "flash-quizzes", "scoring"]
   },
   {
     label: "Competing",
@@ -73,7 +73,7 @@ export const docPages: DocPage[] = [
       "Learn what Quizora is, how accounts work, how to browse quizzes, and how your progress is saved.",
     category: "Start Here",
     readingTime: "4 min read",
-    updatedAt: "2026-05-24",
+    updatedAt: "2026-05-25",
     visibility: "public",
     keywords: ["account", "dashboard", "start quiz", "browse", "progress"],
     relatedDocs: ["quizzes", "scoring", "faq"],
@@ -241,6 +241,82 @@ export const docPages: DocPage[] = [
     ]
   },
   {
+    slug: "flash-quizzes",
+    title: "Flash Quizzes",
+    description:
+      "Create temporary code-based quizzes for friends, classes, events, and practice without entering the permanent public catalog.",
+    category: "Playing Quizzes",
+    readingTime: "5 min read",
+    updatedAt: "2026-05-25",
+    visibility: "public",
+    keywords: ["flash quiz", "temporary quiz", "host dashboard", "quiz code", "self-paced"],
+    relatedDocs: ["quizzes", "live-rooms", "creator-guide"],
+    sections: [
+      {
+        id: "what-flash-quizzes-are",
+        heading: "What Flash Quizzes are",
+        body: [
+          "Flash Quizzes are temporary Quizora quizzes created by signed-in users and shared through a Flash Code or link.",
+          "They are useful for friends, classmates, live practice, small events, and quick revision. They are not permanent public quiz catalog pages."
+        ],
+        links: [{ label: "Open Flash Quizzes", href: "/flash" }]
+      },
+      {
+        id: "catalog-separation",
+        heading: "How they differ from public quizzes",
+        body: [
+          "Permanent public quizzes are created by admins or approved creators, reviewed for quality, and can appear in the public catalog and sitemap.",
+          "Flash Quizzes are link-only, noindex, temporary, and do not appear in /quizzes, /categories, public search, sitemap, SEO metadata, permanent leaderboards, XP, streaks, badges, or saved public attempts."
+        ],
+        warnings: [
+          "Do not use Flash Quizzes to publish spam, copied exam content, unsafe content, or public SEO pages."
+        ]
+      },
+      {
+        id: "modes",
+        heading: "Live and self-paced modes",
+        body: [
+          "Live host mode lets a host start the quiz, advance questions, watch submitted counts, review answer distribution, and follow a live leaderboard.",
+          "Self-paced mode lets players finish through the link before expiry. Results go to a temporary Flash leaderboard only."
+        ],
+        steps: [
+          "Create a Flash Quiz while signed in.",
+          "Add at least three original questions with correct answers and explanations.",
+          "Share the Flash Code or link.",
+          "Host live mode from the host dashboard or let players complete self-paced mode before expiry."
+        ]
+      },
+      {
+        id: "limits",
+        heading: "Expiry and plan limits",
+        body: [
+          "Free users can create Flash Quizzes up to 7 hours, 10 questions, 10 players, and 2 active Flash Quizzes.",
+          "Paid plans can raise expiry, question, player, export, extension, and convert-to-draft limits where those entitlements are active."
+        ],
+        tips: [
+          "Use a shorter expiry for quick practice and a longer paid-plan expiry for classroom review windows.",
+          "Flash Quizzes require login in this version for creation, joining, play, reports, exports, and conversion."
+        ]
+      },
+      {
+        id: "host-tools",
+        heading: "Host dashboard",
+        body: [
+          "The host dashboard shows the Flash Code, expiry, player list, current question, timer context, submitted count, answer distribution, live fluctuating leaderboard, and final results.",
+          "Premium host actions such as exports, expiry extension, and conversion to creator draft show upgrade cards when locked."
+        ]
+      },
+      {
+        id: "convert",
+        heading: "Convert to creator draft",
+        body: [
+          "Creator and Classroom workflows can convert a temporary Flash Quiz into a private creator draft when the account has the required entitlement or creator access.",
+          "Conversion copies quiz text and questions only. It does not copy players, answers, results, or publish the quiz publicly. Public publishing still requires admin review."
+        ]
+      }
+    ]
+  },
+  {
     slug: "leaderboards",
     title: "Leaderboards and verified scores",
     description:
@@ -402,7 +478,10 @@ export const docPages: DocPage[] = [
           "Normal users can play quizzes, join rooms, track progress, and report issues.",
           "Approved creators and teachers can create quiz drafts, add questions, preview content, use private or class-only quizzes, and submit public content for review."
         ],
-        links: [{ label: "Open creator workspace", href: "/creator" }]
+        links: [
+          { label: "Request creator access", href: "/creator/request-access" },
+          { label: "Open creator quizzes", href: "/creator/quizzes" }
+        ]
       },
       {
         id: "draft-workflow",
@@ -414,10 +493,11 @@ export const docPages: DocPage[] = [
         steps: [
           "Create a creator quiz draft.",
           "Add clear questions, plausible options, correct answers, and short explanations.",
-          "Preview and test the quiz.",
+          "Preview the quiz from Creator Studio without creating real attempts.",
           "Submit it for admin review when it is ready.",
-          "Use approved content publicly, or keep class-only content private."
-        ]
+          "Admin approves and publishes safe public quizzes, or rejects with a note so the creator can edit and resubmit."
+        ],
+        links: [{ label: "Create a quiz draft", href: "/creator/quizzes/new" }]
       },
       {
         id: "why-review",
@@ -428,6 +508,18 @@ export const docPages: DocPage[] = [
         ],
         warnings: [
           "Do not copy questions from books, paid courses, exam papers, websites, or coaching material unless you have the rights to use them."
+        ]
+      },
+      {
+        id: "creator-dashboard",
+        heading: "Creator Studio routes",
+        body: [
+          "Approved creators manage drafts from My quiz drafts, edit quiz metadata, add questions, preview answers and explanations, and submit only public-review quizzes for admin approval.",
+          "Draft, submitted, rejected, private, class-only, and approved statuses are shown in the creator dashboard so creators know exactly what can be edited."
+        ],
+        links: [
+          { label: "My creator quizzes", href: "/creator/quizzes" },
+          { label: "Request access", href: "/creator/request-access" }
         ]
       },
       {
@@ -632,7 +724,7 @@ export const docPages: DocPage[] = [
       },
       {
         question: "Can I create quizzes?",
-        answer: "Approved creators and teachers can create quiz drafts. Public publishing requires admin review."
+        answer: "Yes. Any signed-in user can create temporary Flash Quizzes by code or link. Permanent public quizzes still require approved creator or admin review."
       },
       {
         question: "Why can creators not publish directly?",
@@ -768,4 +860,3 @@ export function getAdjacentDocs(page: DocPage) {
     next: index >= 0 && index < publicDocPages.length - 1 ? publicDocPages[index + 1] : null
   };
 }
-

@@ -6,6 +6,7 @@ import { AdminDataState } from "@/components/admin/admin-data-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatCard } from "@/components/ui/stat-card";
@@ -20,6 +21,7 @@ export function AdminClasses() {
   const [classes, setClasses] = useState<ClassroomClass[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
+  const [archiveTarget, setArchiveTarget] = useState<ClassroomClass | null>(null);
 
   async function load() {
     setLoading(true);
@@ -48,6 +50,7 @@ export function AdminClasses() {
   async function archive(classroom: ClassroomClass) {
     await archiveClassroom(classroom.id);
     showToast({ tone: "success", title: "Class archived", description: classroom.name });
+    setArchiveTarget(null);
     await load();
   }
 
@@ -88,7 +91,7 @@ export function AdminClasses() {
                 <div className="flex flex-wrap gap-2">
                   <Button href={`/creator/classes/${classroom.id}`} variant="secondary">Open</Button>
                   {classroom.status === "active" ? (
-                    <Button icon={<Archive className="size-4" />} onClick={() => void archive(classroom)} variant="danger">
+                    <Button icon={<Archive className="size-4" />} onClick={() => setArchiveTarget(classroom)} variant="danger">
                       Archive
                     </Button>
                   ) : null}
@@ -98,6 +101,17 @@ export function AdminClasses() {
           ))}
         </div>
       ) : null}
+      <ConfirmDialog
+        confirmLabel="Archive class"
+        description={`This archives "${archiveTarget?.name ?? "this class"}" and closes it for normal classroom activity. Existing members, assignments, and results are kept for review.`}
+        onCancel={() => setArchiveTarget(null)}
+        onConfirm={() => {
+          if (!archiveTarget) return;
+          void archive(archiveTarget);
+        }}
+        open={Boolean(archiveTarget)}
+        title="Archive this class?"
+      />
     </div>
   );
 }

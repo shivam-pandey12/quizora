@@ -197,6 +197,8 @@ export async function listPublicQuizzes(): Promise<Quiz[]> {
       getCollection("quizzes"),
       where("status", "==", "published"),
       where("visibility", "==", "public"),
+      where("publishScope", "==", "global"),
+      where("reviewStatus", "==", "approved"),
       orderBy("publishedAt", "desc"),
       limit(publicListLimit)
     )
@@ -210,6 +212,8 @@ export async function listPublicQuizzesByCategory(categoryId: string): Promise<Q
       getCollection("quizzes"),
       where("status", "==", "published"),
       where("visibility", "==", "public"),
+      where("publishScope", "==", "global"),
+      where("reviewStatus", "==", "approved"),
       where("categoryId", "==", categoryId),
       orderBy("publishedAt", "desc"),
       limit(publicListLimit)
@@ -225,6 +229,8 @@ export async function getPublicQuizBySlug(slug: string): Promise<Quiz | null> {
       where("slug", "==", slug),
       where("status", "==", "published"),
       where("visibility", "==", "public"),
+      where("publishScope", "==", "global"),
+      where("reviewStatus", "==", "approved"),
       limit(1)
     )
   );

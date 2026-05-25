@@ -12,6 +12,14 @@ import type {
   ClassMember,
   ClassroomClass,
   ClassLeaderboardRow,
+  CreatorRequest,
+  FlashAnswer,
+  FlashPlayer,
+  FlashQuestion,
+  FlashQuiz,
+  FlashQuizSettings,
+  FlashReport,
+  FlashResult,
   LeaderboardEntry,
   MatchmakingPlayerCount,
   MatchmakingQueueEntry,
@@ -134,7 +142,9 @@ export function mapQuiz(snapshot: FirestoreSnapshot): Quiz {
     data.reviewStatus === "approved" ||
     data.reviewStatus === "rejected"
       ? data.reviewStatus
-      : "draft";
+      : ownerType === "admin" && status === "published"
+        ? "approved"
+        : "draft";
 
   return {
     id: snapshot.id,
@@ -158,15 +168,51 @@ export function mapQuiz(snapshot: FirestoreSnapshot): Quiz {
     playCount: asNumber(data.playCount),
     averageScore: asNumber(data.averageScore),
     createdBy: asString(data.createdBy),
+    updatedBy: asString(data.updatedBy),
     ownerId: asString(data.ownerId, asString(data.createdBy)),
     ownerName: asString(data.ownerName, "Quizora Studio"),
+    ownerEmail: asString(data.ownerEmail),
     ownerType,
     publishScope,
     reviewStatus,
+    rejectionNote: asString(data.rejectionNote),
+    submittedAt: toIso(data.submittedAt),
+    reviewedAt: toIso(data.reviewedAt),
+    reviewedBy: asString(data.reviewedBy),
+    reviewedByName: asString(data.reviewedByName),
+    approvedAt: toIso(data.approvedAt),
+    approvedBy: asString(data.approvedBy),
+    creatorEditable: asBoolean(data.creatorEditable, true),
     allowedClassIds: asStringArray(data.allowedClassIds),
     createdAt: toIso(data.createdAt),
     updatedAt: toIso(data.updatedAt),
     publishedAt: toIso(data.publishedAt)
+  };
+}
+
+export function mapCreatorRequest(snapshot: FirestoreSnapshot): CreatorRequest {
+  const data = snapshot.data() ?? {};
+  const status =
+    data.status === "approved" || data.status === "rejected" ? data.status : "pending";
+
+  return {
+    id: snapshot.id,
+    userId: asString(data.userId),
+    displayName: asString(data.displayName, "Quizora learner"),
+    email: asString(data.email),
+    photoURL: asString(data.photoURL) || null,
+    reason: asString(data.reason),
+    interests: asString(data.interests),
+    experience: asString(data.experience),
+    intendedUse: asString(data.intendedUse),
+    agreementAccepted: asBoolean(data.agreementAccepted),
+    status,
+    adminNote: asString(data.adminNote),
+    reviewedBy: asString(data.reviewedBy),
+    reviewedByName: asString(data.reviewedByName),
+    reviewedAt: toIso(data.reviewedAt),
+    createdAt: toIso(data.createdAt),
+    updatedAt: toIso(data.updatedAt)
   };
 }
 
@@ -701,6 +747,204 @@ export function mapRoomResult(snapshot: FirestoreSnapshot): RoomResult {
     securityFlags: asSecurityFlags(data.securityFlags),
     reviewStatus: asReviewStatus(data.reviewStatus),
     completedAt: toIso(data.completedAt)
+  };
+}
+
+function mapFlashSettings(value: unknown): FlashQuizSettings {
+  const data = asRecord(value);
+  return {
+    shuffleQuestions: asBoolean(data.shuffleQuestions),
+    shuffleOptions: asBoolean(data.shuffleOptions),
+    showCorrectAfterEachQuestion: asBoolean(data.showCorrectAfterEachQuestion),
+    allowLateJoin: asBoolean(data.allowLateJoin, true),
+    autoAdvance: asBoolean(data.autoAdvance),
+    requireLogin: asBoolean(data.requireLogin, true),
+    allowRetake: asBoolean(data.allowRetake),
+    maxAttemptsPerPlayer: Math.max(1, asNumber(data.maxAttemptsPerPlayer, 1)),
+    showLeaderboardDuringPlay: asBoolean(data.showLeaderboardDuringPlay, true),
+    showLeaderboardAfterFinish: asBoolean(data.showLeaderboardAfterFinish, true)
+  };
+}
+
+export function mapFlashQuiz(snapshot: FirestoreSnapshot): FlashQuiz {
+  const data = snapshot.data() ?? {};
+  const mode = data.mode === "self-paced" ? "self-paced" : "live";
+  const status =
+    data.status === "draft" ||
+    data.status === "running" ||
+    data.status === "ended" ||
+    data.status === "expired" ||
+    data.status === "archived"
+      ? data.status
+      : "active";
+  const antiAbuse = asRecord(data.antiAbuse);
+
+  return {
+    id: snapshot.id,
+    flashCode: asString(data.flashCode),
+    title: asString(data.title, "Untitled Flash Quiz"),
+    description: asString(data.description),
+    hostId: asString(data.hostId),
+    hostName: asString(data.hostName, "Quizora Host"),
+    hostPhotoURL: asString(data.hostPhotoURL) || null,
+    mode,
+    status,
+    visibility: "link-only",
+    expiryHours: asNumber(data.expiryHours, 1),
+    expiresAt: toIso(data.expiresAt),
+    createdAt: toIso(data.createdAt),
+    updatedAt: toIso(data.updatedAt),
+    startedAt: toIso(data.startedAt),
+    endedAt: toIso(data.endedAt),
+    currentQuestionIndex: asNumber(data.currentQuestionIndex),
+    questionStartedAt: toIso(data.questionStartedAt),
+    questionEndsAt: toIso(data.questionEndsAt),
+    questionCount: asNumber(data.questionCount),
+    totalPoints: asNumber(data.totalPoints),
+    maxPlayers: asNumber(data.maxPlayers, 10),
+    playerCount: asNumber(data.playerCount),
+    allowGuests: asBoolean(data.allowGuests),
+    showAnswersAfterEach: asBoolean(data.showAnswersAfterEach),
+    leaderboardMode: data.leaderboardMode === "score-speed" ? "score-speed" : "score",
+    questionTimerSeconds: asNumber(data.questionTimerSeconds, 30),
+    lockAfterStart: asBoolean(data.lockAfterStart, true),
+    isPremiumExtended: asBoolean(data.isPremiumExtended),
+    extensionCount: asNumber(data.extensionCount),
+    source: "flash",
+    convertedQuizId: asString(data.convertedQuizId) || null,
+    antiAbuse: {
+      duplicateAnswerAttempts: asNumber(antiAbuse.duplicateAnswerAttempts),
+      failedJoinAttempts: asNumber(antiAbuse.failedJoinAttempts),
+      reportCount: asNumber(antiAbuse.reportCount),
+      flags: asStringArray(antiAbuse.flags)
+    },
+    settings: mapFlashSettings(data.settings)
+  };
+}
+
+export function mapFlashQuestion(snapshot: FirestoreSnapshot): FlashQuestion {
+  const data = snapshot.data() ?? {};
+  const type =
+    data.type === "multiple-choice" || data.type === "true-false" || data.type === "text"
+      ? data.type
+      : "single-choice";
+  return {
+    id: snapshot.id,
+    flashQuizId: asString(data.flashQuizId),
+    questionText: asString(data.questionText),
+    type,
+    options: asOptions(data.options).filter((option) => option.id && option.text),
+    correctAnswer: asString(data.correctAnswer),
+    correctAnswers: asStringArray(data.correctAnswers),
+    explanation: asString(data.explanation),
+    points: asNumber(data.points, 1),
+    timeLimitSeconds: asNumber(data.timeLimitSeconds, 30),
+    order: asNumber(data.order),
+    status: data.status === "hidden" ? "hidden" : "active",
+    createdAt: toIso(data.createdAt),
+    updatedAt: toIso(data.updatedAt)
+  };
+}
+
+export function mapFlashPlayer(snapshot: FirestoreSnapshot): FlashPlayer {
+  const data = snapshot.data() ?? {};
+  const status =
+    data.status === "ready" ||
+    data.status === "playing" ||
+    data.status === "submitted" ||
+    data.status === "completed" ||
+    data.status === "left" ||
+    data.status === "disconnected"
+      ? data.status
+      : "joined";
+  return {
+    id: snapshot.id,
+    flashQuizId: asString(data.flashQuizId),
+    flashCode: asString(data.flashCode),
+    userId: asString(data.userId),
+    displayName: asString(data.displayName, "Quizora Player"),
+    photoURL: asString(data.photoURL) || null,
+    role: data.role === "host" ? "host" : "player",
+    isGuest: asBoolean(data.isGuest),
+    status,
+    score: asNumber(data.score),
+    accuracy: asNumber(data.accuracy),
+    rank: asNumber(data.rank),
+    previousRank: asNumber(data.previousRank),
+    rankDelta: asNumber(data.rankDelta),
+    correctCount: asNumber(data.correctCount),
+    wrongCount: asNumber(data.wrongCount),
+    skippedCount: asNumber(data.skippedCount),
+    totalTimeSeconds: asNumber(data.totalTimeSeconds),
+    joinedAt: toIso(data.joinedAt),
+    lastActiveAt: toIso(data.lastActiveAt),
+    completedAt: toIso(data.completedAt)
+  };
+}
+
+export function mapFlashAnswer(snapshot: FirestoreSnapshot): FlashAnswer {
+  const data = snapshot.data() ?? {};
+  return {
+    id: snapshot.id,
+    flashQuizId: asString(data.flashQuizId),
+    flashCode: asString(data.flashCode),
+    playerId: asString(data.playerId),
+    userId: asString(data.userId),
+    questionId: asString(data.questionId),
+    questionIndex: asNumber(data.questionIndex),
+    selectedAnswer: asString(data.selectedAnswer),
+    selectedAnswers: asStringArray(data.selectedAnswers),
+    isCorrect: asBoolean(data.isCorrect),
+    pointsEarned: asNumber(data.pointsEarned),
+    pointsPossible: asNumber(data.pointsPossible),
+    timeTakenSeconds: asNumber(data.timeTakenSeconds),
+    answeredAt: toIso(data.answeredAt),
+    createdAt: toIso(data.createdAt)
+  };
+}
+
+export function mapFlashResult(snapshot: FirestoreSnapshot): FlashResult {
+  const data = snapshot.data() ?? {};
+  return {
+    id: snapshot.id,
+    flashQuizId: asString(data.flashQuizId),
+    flashCode: asString(data.flashCode),
+    playerId: asString(data.playerId),
+    userId: asString(data.userId),
+    displayName: asString(data.displayName, "Quizora Player"),
+    photoURL: asString(data.photoURL) || null,
+    score: asNumber(data.score),
+    totalPoints: asNumber(data.totalPoints),
+    accuracy: asNumber(data.accuracy),
+    correctCount: asNumber(data.correctCount),
+    wrongCount: asNumber(data.wrongCount),
+    skippedCount: asNumber(data.skippedCount),
+    rank: asNumber(data.rank),
+    previousRank: asNumber(data.previousRank),
+    totalTimeSeconds: asNumber(data.totalTimeSeconds),
+    completedAt: toIso(data.completedAt),
+    createdAt: toIso(data.createdAt)
+  };
+}
+
+export function mapFlashReport(snapshot: FirestoreSnapshot): FlashReport {
+  const data = snapshot.data() ?? {};
+  const status =
+    data.status === "reviewing" || data.status === "resolved" || data.status === "dismissed"
+      ? data.status
+      : "open";
+  return {
+    id: snapshot.id,
+    flashQuizId: asString(data.flashQuizId),
+    flashCode: asString(data.flashCode),
+    reportedBy: asString(data.reportedBy),
+    reason: asString(data.reason),
+    details: asString(data.details),
+    status,
+    createdAt: toIso(data.createdAt),
+    updatedAt: toIso(data.updatedAt),
+    reviewedBy: asString(data.reviewedBy),
+    adminNote: asString(data.adminNote)
   };
 }
 

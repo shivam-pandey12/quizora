@@ -175,6 +175,51 @@ service cloud.firestore {
         && exists(roomPlayerPath(roomId, request.auth.uid));
     }
 
+    function flashQuizPath(flashQuizId) {
+      return /databases/$(database)/documents/flashQuizzes/$(flashQuizId);
+    }
+
+    function flashQuizExists(flashQuizId) {
+      return flashQuizId is string && exists(flashQuizPath(flashQuizId));
+    }
+
+    function flashPlayerDocId(flashQuizId, uid) {
+      return flashQuizId + '_' + uid;
+    }
+
+    function flashPlayerPath(flashQuizId, uid) {
+      return /databases/$(database)/documents/flashPlayers/$(flashPlayerDocId(flashQuizId, uid));
+    }
+
+    function isFlashHost(flashQuizId) {
+      return signedIn()
+        && flashQuizExists(flashQuizId)
+        && get(flashQuizPath(flashQuizId)).data.hostId == request.auth.uid;
+    }
+
+    function isFlashParticipant(flashQuizId) {
+      return signedIn()
+        && flashQuizExists(flashQuizId)
+        && exists(flashPlayerPath(flashQuizId, request.auth.uid));
+    }
+
+    function canReadFlashQuiz(flashQuizId) {
+      return signedIn()
+        && (
+          isAdmin()
+          || isFlashHost(flashQuizId)
+          || isFlashParticipant(flashQuizId)
+          || (
+            get(flashQuizPath(flashQuizId)).data.visibility == 'link-only'
+            && get(flashQuizPath(flashQuizId)).data.status in ['active', 'running', 'ended', 'expired']
+          )
+        );
+    }
+
+    function canReadFlashScopedData(flashQuizId) {
+      return isAdmin() || isFlashHost(flashQuizId) || isFlashParticipant(flashQuizId);
+    }
+
     function isRoomParticipantAfter(roomId) {
       return signedIn()
         && roomExists(roomId)
@@ -199,10 +244,26 @@ service cloud.firestore {
         );
     }
 
+    function publicQuizReadAllowed(data) {
+      return data.status == 'published'
+        && data.visibility == 'public'
+        && (
+          !data.keys().hasAny(['publishScope'])
+          || data.publishScope == 'global'
+        )
+        && (
+          !data.keys().hasAny(['ownerType'])
+          || data.ownerType == 'admin'
+          || (
+            data.ownerType == 'creator'
+            && data.reviewStatus == 'approved'
+          )
+        );
+    }
+
     function isPublishedPublicQuiz(quizId) {
       return exists(/databases/$(database)/documents/quizzes/$(quizId))
-        && get(/databases/$(database)/documents/quizzes/$(quizId)).data.status == 'published'
-        && get(/databases/$(database)/documents/quizzes/$(quizId)).data.visibility == 'public';
+        && publicQuizReadAllowed(get(/databases/$(database)/documents/quizzes/$(quizId)).data);
     }
 
     function attemptPath(attemptId) {
@@ -695,11 +756,14 @@ service cloud.firestore {
     function creatorQuizCreateAllowed() {
       return hasCreatorAccess()
         && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.ownerType == 'creator'
         && request.resource.data.status == 'draft'
         && request.resource.data.visibility == 'private'
-        && (request.resource.data.publishScope == 'class-only' || request.resource.data.publishScope == 'private')
-        && request.resource.data.reviewStatus == 'draft';
+        && request.resource.data.publishScope in ['class-only', 'private', 'global']
+        && request.resource.data.reviewStatus == 'draft'
+        && request.resource.data.isFeatured == false
+        && request.resource.data.isDailyChallenge == false;
     }
 
     function creatorQuizUpdateAllowed() {
@@ -707,11 +771,14 @@ service cloud.firestore {
         && resource.data.ownerId == request.auth.uid
         && resource.data.ownerType == 'creator'
         && request.resource.data.ownerId == resource.data.ownerId
+        && request.resource.data.createdBy == resource.data.createdBy
         && request.resource.data.ownerType == resource.data.ownerType
         && request.resource.data.status in ['draft', 'archived']
         && request.resource.data.visibility == 'private'
-        && request.resource.data.publishScope in ['class-only', 'private']
-        && request.resource.data.reviewStatus in ['draft', 'submitted'];
+        && request.resource.data.publishScope in ['class-only', 'private', 'global']
+        && request.resource.data.reviewStatus == 'draft'
+        && request.resource.data.isFeatured == false
+        && request.resource.data.isDailyChallenge == false;
     }
 
     function creatorQuestionManageAllowed(data) {
@@ -719,7 +786,47 @@ service cloud.firestore {
         && data.quizId is string
         && isQuizOwner(data.quizId)
         && get(quizPath(data.quizId)).data.ownerType == 'creator'
-        && get(quizPath(data.quizId)).data.publishScope in ['class-only', 'private'];
+        && get(quizPath(data.quizId)).data.publishScope in ['class-only', 'private', 'global']
+        && get(quizPath(data.quizId)).data.reviewStatus in ['draft', 'rejected'];
+    }
+
+    function creatorRequestCreateAllowed(requestId, data) {
+      return signedIn()
+        && requestId == request.auth.uid
+        && data.keys().hasOnly([
+          'userId',
+          'displayName',
+          'email',
+          'photoURL',
+          'reason',
+          'interests',
+          'experience',
+          'intendedUse',
+          'agreementAccepted',
+          'status',
+          'adminNote',
+          'reviewedBy',
+          'reviewedByName',
+          'reviewedAt',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.userId == request.auth.uid
+        && isShortString(data.displayName, 120)
+        && isShortString(data.email, 180)
+        && nullableShortString(data.photoURL, 600)
+        && isShortString(data.reason, 2000)
+        && isShortString(data.interests, 600)
+        && isShortString(data.experience, 600)
+        && isShortString(data.intendedUse, 80)
+        && data.agreementAccepted == true
+        && data.status == 'pending'
+        && data.adminNote == ''
+        && data.reviewedBy == ''
+        && data.reviewedByName == ''
+        && data.reviewedAt == null
+        && nullableTimestamp(data.createdAt)
+        && nullableTimestamp(data.updatedAt);
     }
 
     function roomReadAllowed(roomId) {
@@ -997,16 +1104,22 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    match /creatorRequests/{requestId} {
+      allow get: if isAdmin() || isSelf(requestId);
+      allow list: if isAdmin();
+      allow create: if creatorRequestCreateAllowed(requestId, request.resource.data);
+      allow update, delete: if isAdmin();
+    }
+
     match /categories/{categoryId} {
       allow get, list: if resource.data.status == 'active' || isAdmin();
       allow create, update, delete: if isAdmin();
     }
 
     match /quizzes/{quizId} {
-      allow get, list: if (
-        resource.data.status == 'published'
-        && resource.data.visibility == 'public'
-      ) || isAdmin() || resource.data.ownerId == request.auth.uid;
+      allow get, list: if publicQuizReadAllowed(resource.data)
+        || isAdmin()
+        || (signedIn() && resource.data.ownerId == request.auth.uid);
       allow create: if isAdmin() || creatorQuizCreateAllowed();
       allow update: if isAdmin() || creatorQuizUpdateAllowed();
       allow delete: if isAdmin()
@@ -1110,6 +1223,58 @@ service cloud.firestore {
         );
       allow create, update: if isAdmin();
       allow delete: if isAdmin();
+    }
+
+    match /flashQuizzes/{flashQuizId} {
+      allow get: if canReadFlashQuiz(flashQuizId);
+      allow list: if signedIn()
+        && (
+          isAdmin()
+          || resource.data.hostId == request.auth.uid
+          || isFlashParticipant(flashQuizId)
+        );
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /flashQuestions/{questionId} {
+      allow read: if signedIn()
+        && (
+          isAdmin()
+          || isFlashHost(resource.data.flashQuizId)
+        );
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /flashPlayers/{playerId} {
+      allow read: if signedIn()
+        && canReadFlashScopedData(resource.data.flashQuizId);
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /flashAnswers/{answerId} {
+      allow read: if signedIn()
+        && (
+          isAdmin()
+          || isFlashHost(resource.data.flashQuizId)
+          || resource.data.userId == request.auth.uid
+        );
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /flashResults/{resultId} {
+      allow read: if signedIn()
+        && (
+          isAdmin()
+          || isFlashHost(resource.data.flashQuizId)
+          || isFlashParticipant(resource.data.flashQuizId)
+          || resource.data.userId == request.auth.uid
+        );
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /flashReports/{reportId} {
+      allow read, update, delete: if isAdmin();
+      allow create: if isAdmin();
     }
 
     match /matchmakingQueue/{queueId} {
