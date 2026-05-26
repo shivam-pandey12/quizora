@@ -18,8 +18,15 @@ function serviceAccountFromEnv(): ServiceAccount | null {
   const json = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
   if (json) {
     try {
-      const parsed = JSON.parse(json) as ServiceAccount;
-      if (parsed.projectId && parsed.clientEmail && parsed.privateKey) return parsed;
+      const parsed = JSON.parse(json) as ServiceAccount & {
+        project_id?: string;
+        client_email?: string;
+        private_key?: string;
+      };
+      const projectId = parsed.projectId || parsed.project_id;
+      const clientEmail = parsed.clientEmail || parsed.client_email;
+      const privateKey = parsed.privateKey || parsed.private_key;
+      if (projectId && clientEmail && privateKey) return { projectId, clientEmail, privateKey };
     } catch {
       return null;
     }
@@ -28,8 +35,15 @@ function serviceAccountFromEnv(): ServiceAccount | null {
   const base64 = process.env.FIREBASE_SERVICE_ACCOUNT_BASE64;
   if (base64) {
     try {
-      const parsed = JSON.parse(Buffer.from(base64, "base64").toString("utf8")) as ServiceAccount;
-      if (parsed.projectId && parsed.clientEmail && parsed.privateKey) return parsed;
+      const parsed = JSON.parse(Buffer.from(base64, "base64").toString("utf8")) as ServiceAccount & {
+        project_id?: string;
+        client_email?: string;
+        private_key?: string;
+      };
+      const projectId = parsed.projectId || parsed.project_id;
+      const clientEmail = parsed.clientEmail || parsed.client_email;
+      const privateKey = parsed.privateKey || parsed.private_key;
+      if (projectId && clientEmail && privateKey) return { projectId, clientEmail, privateKey };
     } catch {
       return null;
     }
@@ -41,6 +55,33 @@ function serviceAccountFromEnv(): ServiceAccount | null {
 
   if (!projectId || !clientEmail || !privateKey) return null;
   return { projectId, clientEmail, privateKey };
+}
+
+function projectIdFromEnv() {
+  return (
+    serviceAccountFromEnv()?.projectId ||
+    process.env.FIREBASE_PROJECT_ID ||
+    process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ||
+    ""
+  );
+}
+
+function uniqueValues(values: string[]) {
+  return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
+}
+
+export function getStorageBucketCandidates() {
+  const projectId = projectIdFromEnv();
+  const configured =
+    process.env.FIREBASE_STORAGE_BUCKET ||
+    process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ||
+    "";
+
+  return uniqueValues([
+    configured,
+    projectId ? `${projectId}.firebasestorage.app` : "",
+    projectId ? `${projectId}.appspot.com` : ""
+  ]);
 }
 
 export function isFirebaseAdminConfigured() {
@@ -64,9 +105,7 @@ export function getAdminApp() {
   cachedApp = initializeApp({
     credential: serviceAccount ? cert(serviceAccount) : applicationDefault(),
     projectId: serviceAccount?.projectId || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-    storageBucket:
-      process.env.FIREBASE_STORAGE_BUCKET ||
-      process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+    storageBucket: getStorageBucketCandidates()[0]
   });
   return cachedApp;
 }
@@ -79,14 +118,12 @@ export function getAdminDb() {
   return getFirestore(getAdminApp());
 }
 
-export function getAdminStorageBucket() {
-  const bucketName =
-    process.env.FIREBASE_STORAGE_BUCKET ||
-    process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
-  if (!bucketName) {
+export function getAdminStorageBucket(bucketName?: string) {
+  const resolvedBucketName = bucketName || getStorageBucketCandidates()[0];
+  if (!resolvedBucketName) {
     throw new Error("Firebase Storage bucket is not configured.");
   }
-  return getStorage(getAdminApp()).bucket(bucketName);
+  return getStorage(getAdminApp()).bucket(resolvedBucketName);
 }
 
 export async function verifyFirebaseBearerToken(request: Request) {

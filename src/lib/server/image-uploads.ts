@@ -3,7 +3,12 @@ import "server-only";
 import { randomUUID } from "crypto";
 import { FieldValue } from "firebase-admin/firestore";
 import type { DecodedIdToken } from "firebase-admin/auth";
-import { getAdminDb, getAdminStorageBucket, verifyFirebaseBearerToken } from "@/lib/firebase/admin";
+import {
+  getAdminDb,
+  getAdminStorageBucket,
+  getStorageBucketCandidates,
+  verifyFirebaseBearerToken
+} from "@/lib/firebase/admin";
 
 type UploadKind = "quiz-cover" | "question-image" | "option-image";
 type DeleteKind = "quiz-cover" | "question-image" | "option-image";
@@ -103,9 +108,76 @@ function downloadUrl(bucketName: string, path: string, token: string) {
   return `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(path)}?alt=media&token=${token}`;
 }
 
-async function deletePathIfOwned(path: string, prefix: string) {
+function isMissingBucketError(error: unknown) {
+  const data = error as { code?: unknown; message?: unknown };
+  const message = typeof data?.message === "string" ? data.message.toLowerCase() : "";
+  return data?.code === 404 || (message.includes("bucket") && message.includes("does not exist"));
+}
+
+function bucketFromDownloadUrl(url: string) {
+  try {
+    const parsed = new URL(url);
+    const segments = parsed.pathname.split("/").filter(Boolean);
+    const bucketIndex = segments.indexOf("b");
+    return bucketIndex >= 0 ? decodeURIComponent(segments[bucketIndex + 1] ?? "") : "";
+  } catch {
+    return "";
+  }
+}
+
+async function saveToStorageBucket({
+  path,
+  buffer,
+  contentType,
+  token,
+  uploadedBy,
+  quizId,
+  questionId,
+  optionId
+}: {
+  path: string;
+  buffer: Buffer;
+  contentType: string;
+  token: string;
+  uploadedBy: string;
+  quizId: string;
+  questionId: string;
+  optionId: string;
+}) {
+  const candidates = getStorageBucketCandidates();
+
+  for (const bucketName of candidates) {
+    const bucket = getAdminStorageBucket(bucketName);
+    try {
+      await bucket.file(path).save(buffer, {
+        contentType,
+        resumable: false,
+        metadata: {
+          cacheControl: "public, max-age=31536000",
+          metadata: {
+            firebaseStorageDownloadTokens: token,
+            uploadedBy,
+            quizId,
+            questionId,
+            optionId
+          }
+        }
+      });
+      return bucket;
+    } catch (caught) {
+      if (!isMissingBucketError(caught)) throw caught;
+    }
+  }
+
+  throw new Error(
+    `Firebase Storage bucket was not found. Tried: ${candidates.join(", ") || "none"}. Create Firebase Storage for this project or set FIREBASE_STORAGE_BUCKET to the exact bucket name.`
+  );
+}
+
+async function deletePathIfOwned(path: string, prefix: string, imageUrl = "") {
   if (!path || !path.startsWith(prefix)) throw new Error("Image path does not match this editor context.");
-  await getAdminStorageBucket()
+  const bucketName = bucketFromDownloadUrl(imageUrl);
+  await getAdminStorageBucket(bucketName || undefined)
     .file(path)
     .delete({ ignoreNotFound: true })
     .catch(() => undefined);
@@ -269,21 +341,15 @@ export async function handleImageUpload(request: Request, kind: UploadKind) {
   const fileName = safeStorageFileName(file, extension);
   const path = uploadPath(kind, quizId, questionId, optionId, fileName);
   const token = randomUUID();
-  const bucket = getAdminStorageBucket();
-
-  await bucket.file(path).save(buffer, {
+  const bucket = await saveToStorageBucket({
+    path,
+    buffer,
     contentType: file.type,
-    resumable: false,
-    metadata: {
-      cacheControl: "public, max-age=31536000",
-      metadata: {
-        firebaseStorageDownloadTokens: token,
-        uploadedBy: decoded.uid,
-        quizId,
-        questionId,
-        optionId
-      }
-    }
+    token,
+    uploadedBy: decoded.uid,
+    quizId,
+    questionId,
+    optionId
   });
 
   const url = downloadUrl(bucket.name, path, token);
@@ -312,7 +378,7 @@ export async function handleImageDelete(request: Request) {
   }
   if (kind === "option-image" && !optionId) throw new Error("optionId is required.");
 
-  await deletePathIfOwned(path, expectedPrefix(kind, quizId, questionId, optionId));
+  await deletePathIfOwned(path, expectedPrefix(kind, quizId, questionId, optionId), url);
   await clearMetadata({ kind, quizId, questionId, optionId, url });
   return { ok: true };
 }
