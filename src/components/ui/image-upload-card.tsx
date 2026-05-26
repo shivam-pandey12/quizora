@@ -24,6 +24,8 @@ export interface EditableImageMetadata {
   imageCaption?: string;
 }
 
+const storageUploadsEnabled = process.env.NEXT_PUBLIC_IMAGE_UPLOADS_ENABLED === "true";
+
 export function ImageUploadCard({
   title,
   description,
@@ -57,7 +59,7 @@ export function ImageUploadCard({
   const [pendingPreviewUrl, setPendingPreviewUrl] = useState("");
   const hasPendingMode = Boolean(onPendingFileChange);
   const hasImage = Boolean(metadata.imageUrl || pendingPreviewUrl);
-  const blocked = disabled || !user || working || (!target && !hasPendingMode);
+  const fileUploadBlocked = disabled || !user || working || (!target && !hasPendingMode);
 
   useEffect(() => {
     if (!pendingFile) {
@@ -72,6 +74,10 @@ export function ImageUploadCard({
 
   async function upload(file: File | undefined) {
     if (!file || !user) return;
+    if (!storageUploadsEnabled) {
+      setError("Firebase Storage uploads are disabled. Paste a public image URL instead.");
+      return;
+    }
     const validation = validateImageFile(file);
     if (validation) {
       setError(validation);
@@ -113,6 +119,11 @@ export function ImageUploadCard({
   }
 
   async function remove() {
+    if (!storageUploadsEnabled) {
+      onChange({ imageUrl: "", imagePath: "", imageAlt: "", imageCaption: "" });
+      onPendingFileChange?.(null);
+      return;
+    }
     if (!metadata.imagePath && pendingFile && onPendingFileChange) {
       onPendingFileChange(null);
       if (!metadata.imageUrl) onChange({ imageUrl: "", imagePath: "", imageAlt: "", imageCaption: "" });
@@ -155,27 +166,31 @@ export function ImageUploadCard({
           ) : null}
         </div>
         <div className="flex flex-wrap gap-2">
-          <input
-            accept="image/jpeg,image/png,image/webp"
-            className="sr-only"
-            disabled={blocked}
-            onChange={(event) => void upload(event.target.files?.[0])}
-            ref={inputRef}
-            type="file"
-          />
-          <Button
-            disabled={blocked}
-            icon={working ? <Loader2 className="size-4 animate-spin" /> : <UploadCloud className="size-4" />}
-            onClick={() => inputRef.current?.click()}
-            size="sm"
-            type="button"
-            variant="secondary"
-          >
-            {!target && hasPendingMode ? (hasImage ? "Replace" : "Choose") : hasImage ? "Replace" : "Upload"}
-          </Button>
+          {storageUploadsEnabled ? (
+            <>
+              <input
+                accept="image/jpeg,image/png,image/webp"
+                className="sr-only"
+                disabled={fileUploadBlocked}
+                onChange={(event) => void upload(event.target.files?.[0])}
+                ref={inputRef}
+                type="file"
+              />
+              <Button
+                disabled={fileUploadBlocked}
+                icon={working ? <Loader2 className="size-4 animate-spin" /> : <UploadCloud className="size-4" />}
+                onClick={() => inputRef.current?.click()}
+                size="sm"
+                type="button"
+                variant="secondary"
+              >
+                {!target && hasPendingMode ? (hasImage ? "Replace" : "Choose") : hasImage ? "Replace" : "Upload"}
+              </Button>
+            </>
+          ) : null}
           {hasImage ? (
             <Button
-              disabled={blocked}
+              disabled={disabled || working}
               icon={<Trash2 className="size-4" />}
               onClick={() => void remove()}
               size="sm"
@@ -188,9 +203,15 @@ export function ImageUploadCard({
         </div>
       </div>
 
-      {disabledReason || (!target && !disabledReason && !hasPendingMode) || (!target && hasPendingMode && pendingFile) ? (
+      {storageUploadsEnabled && (disabledReason || (!target && !disabledReason && !hasPendingMode) || (!target && hasPendingMode && pendingFile)) ? (
         <div className="mt-3 rounded-2xl border border-primary/20 bg-primary/8 px-3 py-2 text-xs text-muted-foreground">
           {disabledReason || (!target && hasPendingMode && pendingFile ? "Image selected. It will upload automatically after you save." : "Save this item first, then upload an image.")}
+        </div>
+      ) : null}
+
+      {!storageUploadsEnabled ? (
+        <div className="mt-3 rounded-2xl border border-primary/20 bg-primary/8 px-3 py-2 text-xs text-muted-foreground">
+          Firebase Storage uploads are disabled. Paste a public image URL below.
         </div>
       ) : null}
 
@@ -206,6 +227,21 @@ export function ImageUploadCard({
       ) : null}
 
       <div className={cn("mt-4 grid gap-3", caption && "md:grid-cols-2")}>
+        <label className={cn("grid gap-2 text-sm font-semibold", caption && "md:col-span-2")}>
+          Image URL
+          <Input
+            disabled={disabled || working}
+            onChange={(event) =>
+              onChange({
+                ...metadata,
+                imageUrl: event.target.value,
+                imagePath: event.target.value === metadata.imageUrl ? metadata.imagePath : ""
+              })
+            }
+            placeholder="https://example.com/image.webp"
+            value={metadata.imageUrl}
+          />
+        </label>
         <label className="grid gap-2 text-sm font-semibold">
           Alt text
           <Input
@@ -228,7 +264,9 @@ export function ImageUploadCard({
         ) : null}
       </div>
       <p className="mt-3 text-xs text-muted-foreground">
-        JPG, PNG, or WebP only. Maximum file size: 5MB.
+        {storageUploadsEnabled
+          ? "JPG, PNG, or WebP only. Maximum file size: 5MB."
+          : "Use an HTTPS image URL from your own website, CDN, or another image host you are allowed to use."}
       </p>
       <FieldError message={error || undefined} />
     </div>

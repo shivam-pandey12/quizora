@@ -14,6 +14,7 @@ NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=
 NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=
 NEXT_PUBLIC_FIREBASE_APP_ID=
 NEXT_PUBLIC_APP_URL=https://your-production-domain.com
+NEXT_PUBLIC_IMAGE_UPLOADS_ENABLED=false
 NEXT_PUBLIC_RAZORPAY_KEY_ID=
 NEXT_PUBLIC_TRUSTED_SCORING_ENABLED=true
 ```
@@ -52,6 +53,7 @@ COMPETITIVE_MODE_ENABLED=true
 - Test keys must not be mixed with live Razorpay keys.
 - `ATTEMPT_SESSION_SECRET` should be a random 32+ character string.
 - Service account JSON/private keys must never be committed or printed in logs.
-- `FIREBASE_STORAGE_BUCKET` should match `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` when API-route image uploads are enabled.
+- Keep `NEXT_PUBLIC_IMAGE_UPLOADS_ENABLED=false` unless Firebase Storage is enabled for the project. With it disabled, Quizora uses public image URLs instead of file uploads.
+- `FIREBASE_STORAGE_BUCKET` should match `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` only when API-route image uploads are enabled.
 - If a Firebase service-account private key was ever placed in a shared or committed file, revoke that key in Google Cloud IAM and create a new one before launch.
 - Run `npm run launch:audit`; warnings about missing local production env are acceptable on developer machines.

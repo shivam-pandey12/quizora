@@ -66,7 +66,7 @@ Never expose `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`, `ATTEMPT_SESSION_
 - Enable Google sign-in if Google login is used.
 - Add localhost and production domains to Auth authorized domains.
 - Enable Firestore Database.
-- Enable Firebase Storage for quiz and question image uploads.
+- Firebase Storage is optional. If the project is not on a plan with Storage enabled, keep `NEXT_PUBLIC_IMAGE_UPLOADS_ENABLED=false` and use public image URLs for quiz/question images.
 - Verify the actual Firestore edition before go-live:
 
 ```bash

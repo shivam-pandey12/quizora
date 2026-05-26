@@ -42,7 +42,7 @@ Or deploy both:
 firebase deploy --only firestore
 ```
 
-Storage image uploads are performed by trusted Next.js API routes with Firebase Admin SDK. Deploy `storage.rules` before enabling production image uploads so direct client writes remain blocked.
+Storage image uploads are optional. Keep `NEXT_PUBLIC_IMAGE_UPLOADS_ENABLED=false` when Firebase Storage is not enabled; Quizora will use public image URLs instead. If you later enable file uploads, the trusted Next.js API routes use Firebase Admin SDK and `storage.rules` should be deployed so direct client writes remain blocked.
 
 ## Deploy The Next.js App
 

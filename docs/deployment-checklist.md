@@ -44,7 +44,7 @@ git push -u origin main
 - Keep Razorpay, Firebase Admin, and attempt-session secrets server-only.
 - Confirm live/test Razorpay keys are not mixed.
 - Confirm Firebase Admin credentials work for billing and trusted scoring route handlers.
-- Confirm `FIREBASE_STORAGE_BUCKET` is set before enabling image uploads.
+- If Firebase Storage is not enabled, keep `NEXT_PUBLIC_IMAGE_UPLOADS_ENABLED=false` and use public image URLs. Set `FIREBASE_STORAGE_BUCKET` only before enabling file uploads.
 
 ## Firebase
 
